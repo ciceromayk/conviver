@@ -58,13 +58,14 @@ if st.sidebar.button("📝 Abrir Novo Chamado", use_container_width=True):
 # --- Página: Visualizar Chamados (AGORA É A PADRÃO) ---
 if st.session_state.pagina_ativa == "Visualizar Chamados":
     st.subheader("📊 Painel de Acompanhamento de Chamados")
+    
     # A função listar_chamados agora retorna dois valores
     chamados, colunas = db.listar_chamados()
 
     if not chamados:
         st.info("Nenhum chamado encontrado.")
     else:
-        # AQUI está a correção: use as colunas retornadas pela função
+        # Cria o DataFrame com os dados e colunas corretos
         df = pd.DataFrame(chamados, columns=colunas)
         
         # Para melhorar a visualização, vamos buscar o nome da obra
@@ -72,10 +73,56 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
         mapa_obras = {obra['id']: obra['nome_obra'] for obra in obras}
         df['nome_obra'] = df['obra_id'].map(mapa_obras).fillna("Obra não encontrada")
         
-        # Reordenando para melhor visualização
+        # --- CARDS COM O STATUS DOS CHAMADOS ---
+        st.markdown("---")
+        st.subheader("Visão Geral")
+        
+        # Converte as colunas de data para o tipo datetime para comparação
+        df['data_solicitacao'] = pd.to_datetime(df['data_solicitacao'])
+        df['previsao_retorno'] = pd.to_datetime(df['previsao_retorno'])
+        
+        # Filtra os chamados que não foram concluídos
+        df_abertos = df[df['status'] != 'Concluído']
+        
+        # Calcula o número de chamados em aberto (não concluídos)
+        num_abertos = len(df_abertos)
+        
+        # Calcula o número de chamados resolvidos (Concluído)
+        num_resolvidos = len(df[df['status'] == 'Concluído'])
+        
+        # Verifica se a previsão de retorno já passou para os chamados em aberto
+        hoje = pd.to_datetime(date.today())
+        df_abertos_atrasados = df_abertos[df_abertos['previsao_retorno'] < hoje]
+        num_atrasados = len(df_abertos_atrasados)
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric(label="Chamados em Aberto", value=num_abertos)
+        with col2:
+            st.metric(label="Chamados Concluídos", value=num_resolvidos)
+        with col3:
+            st.metric(label="Chamados Atrasados", value=num_atrasados)
+
+        # --- GRÁFICOS ---
+        st.markdown("---")
+        st.subheader("Análise Gráfica")
+        col_grafico1, col_grafico2 = st.columns(2)
+
+        with col_grafico1:
+            st.bar_chart(df.groupby('status').size().rename("Contagem"))
+            st.markdown("<p style='text-align: center;'>Chamados por Status</p>", unsafe_allow_html=True)
+
+        with col_grafico2:
+            st.bar_chart(df.groupby('nome_obra').size().rename("Contagem"))
+            st.markdown("<p style='text-align: center;'>Chamados por Obra</p>", unsafe_allow_html=True)
+        
+        
+        # --- TABELA INTERATIVA E FORMULÁRIO DE EDIÇÃO ---
+        st.markdown("---")
+        st.subheader("Tabela de Chamados")
         st.markdown("Selecione um chamado na tabela para analisar.")
         
-        # AQUI está a mudança principal: st.data_editor para seleção de linha
+        # st.data_editor com o callback
         edited_df = st.data_editor(
             df[['id', 'titulo', 'nome_obra', 'solicitante', 'status', 'data_solicitacao', 'previsao_retorno']],
             hide_index=True,
@@ -90,20 +137,24 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
                 "status": "Status",
                 "data_solicitacao": "Data da Solicitação",
                 "previsao_retorno": "Previsão de Retorno"
-            }
+            },
+            # Adicionando a seleção
+            key='data_editor_chamados'
         )
         
-        # Captura o ID da linha selecionada
-        if edited_df.empty:
-            st.session_state.chamado_selecionado_id = None
+        # Detecta se uma linha foi selecionada ou se a seleção mudou
+        if st.session_state.data_editor_chamados['selection']['rows']:
+            # Pega o ID da linha selecionada
+            selected_id = edited_df.loc[st.session_state.data_editor_chamados['selection']['rows'][0], 'id']
+            if selected_id != st.session_state.chamado_selecionado_id:
+                st.session_state.chamado_selecionado_id = selected_id
+                st.rerun() # Reinicia para carregar os dados
         else:
-            selected_rows = edited_df.loc[edited_df.index.isin(st.session_state.get('last_selected_rows', []))]
-            if not selected_rows.empty:
-                st.session_state.chamado_selecionado_id = selected_rows['id'].iloc[0]
+            # Limpa a seleção se nenhuma linha estiver selecionada
+            if st.session_state.chamado_selecionado_id is not None:
+                st.session_state.chamado_selecionado_id = None
+                st.rerun()
 
-        # Salva as linhas selecionadas para a próxima execução
-        st.session_state.last_selected_rows = edited_df.index
-        
         st.markdown("---")
         st.subheader("🔍 Analisar e Atualizar um Chamado")
         
