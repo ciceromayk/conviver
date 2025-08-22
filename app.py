@@ -13,7 +13,7 @@ st.set_page_config(page_title="Gestor de Chamados e Obras", layout="wide")
 
 # Adiciona um título e uma descrição estilizados
 st.markdown("<h1 style='text-align: center; color: #00796B;'>🚀 Gestor de Solicitações e Obras</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #616161;'>Otimize o controle e acompanhamento de chamados e obras da sua empresa.</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #616161;'>Otimize o controle e o acompanhamento de chamados e obras da sua empresa.</p>", unsafe_allow_html=True)
 st.markdown("---")
 
 # --- Gerenciamento de Estado da Página ---
@@ -189,106 +189,135 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
         mapa_obras = {obra['id']: obra['nome_obra'] for obra in obras}
         df['nome_obra'] = df['obra_id'].map(mapa_obras).fillna("Obra não encontrada")
         
-        # --- Visualização de Status em Expanders ---
+        # --- Visualização de Status em Cards de Estilo Único ---
+        st.markdown("---")
+        st.subheader("Visão Geral do Status dos Chamados")
+        
+        # Contagem para os novos cards
+        num_na_fila = len(df[df['status'] == 'Na Fila de Espera'])
+        num_em_andamento = len(df[df['status'] == 'Em Andamento'])
+        num_concluidos = len(df[df['status'] == 'Concluído'])
+        num_negados = len(df[df['status'] == 'Negado'])
+        
+        df_abertos = df[(df['status'] == 'Na Fila de Espera') | (df['status'] == 'Em Andamento') | (df['status'] == 'Aprovado')]
+        num_abertos = len(df_abertos)
+        
+        hoje = pd.to_datetime(date.today())
+        num_no_prazo = len(df_abertos[df_abertos['previsao_retorno'] >= hoje])
+        num_atrasados = len(df_abertos[df_abertos['previsao_retorno'] < hoje])
+
+        # Estilos CSS embutidos
+        st.markdown("""
+        <style>
+        .metric-card {
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+            height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .metric-card:hover {
+            transform: translateY(-5px);
+        }
+        .metric-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .metric-value {
+            font-size: 32px;
+            font-weight: bold;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # Primeira fila de cards: Status de Fluxo
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.markdown(f"""
+            <div class="metric-card" style="background-color:#E0F7FA;">
+                <p class="metric-title" style="color:#00796B;">Na Fila</p>
+                <p class="metric-value" style="color:#00796B;">{num_na_fila}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        with col2:
+            st.markdown(f"""
+            <div class="metric-card" style="background-color:#E8F5E9;">
+                <p class="metric-title" style="color:#2E7D32;">Em Andamento</p>
+                <p class="metric-value" style="color:#2E7D32;">{num_em_andamento}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        with col3:
+            st.markdown(f"""
+            <div class="metric-card" style="background-color:#E8EAF6;">
+                <p class="metric-title" style="color:#3F51B5;">Concluídos</p>
+                <p class="metric-value" style="color:#3F51B5;">{num_concluidos}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        with col4:
+            st.markdown(f"""
+            <div class="metric-card" style="background-color:#FFEBEE;">
+                <p class="metric-title" style="color:#C62828;">Negados</p>
+                <p class="metric-value" style="color:#C62828;">{num_negados}</p>
+            </div>
+            """, unsafe_allow_html=True)
+
         st.markdown("---")
         
-        col_summary1, col_summary2 = st.columns(2)
-        
-        with col_summary1:
-            with st.expander("Resumo por Status de Fluxo", expanded=True):
-                # Contagem para a primeira fila de cards
-                num_na_fila = len(df[df['status'] == 'Na Fila de Espera'])
-                num_em_andamento = len(df[df['status'] == 'Em Andamento'])
-                num_concluidos = len(df[df['status'] == 'Concluído'])
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.markdown(
-                        f"<div style='background-color:#E0F7FA; padding:10px; border-radius:10px;'>"
-                        f"<h3 style='color:#00796B; text-align:center;'>Na Fila</h3>"
-                        f"<h1 style='color:#00796B; text-align:center;'>{num_na_fila}</h1>"
-                        f"</div>", unsafe_allow_html=True
-                    )
-                with col2:
-                    st.markdown(
-                        f"<div style='background-color:#E8F5E9; padding:10px; border-radius:10px;'>"
-                        f"<h3 style='color:#2E7D32; text-align:center;'>Em Andamento</h3>"
-                        f"<h1 style='color:#2E7D32; text-align:center;'>{num_em_andamento}</h1>"
-                        f"</div>", unsafe_allow_html=True
-                    )
-                with col3:
-                    st.markdown(
-                        f"<div style='background-color:#E8EAF6; padding:10px; border-radius:10px;'>"
-                        f"<h3 style='color:#3F51B5; text-align:center;'>Concluídos</h3>"
-                        f"<h1 style='color:#3F51B5; text-align:center;'>{num_concluidos}</h1>"
-                        f"</div>", unsafe_allow_html=True
-                    )
-        
-        with col_summary2:
-            with st.expander("Resumo por Prazo", expanded=True):
-                # Converte as colunas de data para o tipo datetime para comparação
-                df['data_solicitacao'] = pd.to_datetime(df['data_solicitacao'])
-                df['previsao_retorno'] = pd.to_datetime(df['previsao_retorno'])
-                
-                hoje = pd.to_datetime(date.today())
-                
-                # Contagem para a segunda fila de cards
-                df_abertos = df[(df['status'] == 'Na Fila de Espera') | (df['status'] == 'Em Andamento') | (df['status'] == 'Aprovado')]
-                num_abertos = len(df_abertos)
-                
-                num_no_prazo = len(df_abertos[df_abertos['previsao_retorno'] >= hoje])
-                num_atrasados = len(df_abertos[df_abertos['previsao_retorno'] < hoje])
-                
-                # Segunda fila de cards: Status de prazo
-                col4, col5, col6 = st.columns(3)
-                with col4:
-                    st.markdown(
-                        f"<div style='background-color:#E0F7FA; padding:10px; border-radius:10px;'>"
-                        f"<h3 style='color:#00796B; text-align:center;'>Em Aberto</h3>"
-                        f"<h1 style='color:#00796B; text-align:center;'>{num_abertos}</h1>"
-                        f"</div>", unsafe_allow_html=True
-                    )
-                with col5:
-                    st.markdown(
-                        f"<div style='background-color:#E8F5E9; padding:10px; border-radius:10px;'>"
-                        f"<h3 style='color:#2E7D32; text-align:center;'>No Prazo</h3>"
-                        f"<h1 style='color:#2E7D32; text-align:center;'>{num_no_prazo}</h1>"
-                        f"</div>", unsafe_allow_html=True
-                    )
-                with col6:
-                    st.markdown(
-                        f"<div style='background-color:#FBE9E7; padding:10px; border-radius:10px;'>"
-                        f"<h3 style='color:#D84315; text-align:center;'>Atrasados</h3>"
-                        f"<h1 style='color:#D84315; text-align:center;'>{num_atrasados}</h1>"
-                        f"</div>", unsafe_allow_html=True
-                    )
-
+        # Segunda fila de cards: Status de Prazo
+        col5, col6, col7 = st.columns(3)
+        with col5:
+            st.markdown(f"""
+            <div class="metric-card" style="background-color:#E0F7FA;">
+                <p class="metric-title" style="color:#00796B;">Em Aberto</p>
+                <p class="metric-value" style="color:#00796B;">{num_abertos}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        with col6:
+            st.markdown(f"""
+            <div class="metric-card" style="background-color:#E8F5E9;">
+                <p class="metric-title" style="color:#2E7D32;">No Prazo</p>
+                <p class="metric-value" style="color:#2E7D32;">{num_no_prazo}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        with col7:
+            st.markdown(f"""
+            <div class="metric-card" style="background-color:#FBE9E7;">
+                <p class="metric-title" style="color:#D84315;">Atrasados</p>
+                <p class="metric-value" style="color:#D84315;">{num_atrasados}</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
         # --- GRÁFICOS ---
         st.markdown("---")
-        with st.expander("📈 Análise Gráfica", expanded=True):
-            col_grafico1, col_grafico2 = st.columns(2)
+        st.subheader("Análise Gráfica")
+        col_grafico1, col_grafico2 = st.columns(2)
 
-            with col_grafico1:
-                df_status = df.groupby('status').size().reset_index(name='Contagem')
-                fig_status = px.pie(
-                    df_status, 
-                    values='Contagem', 
-                    names='status', 
-                    title='Distribuição por Status',
-                    color_discrete_sequence=px.colors.qualitative.Pastel
-                )
-                st.plotly_chart(fig_status, use_container_width=True)
+        with col_grafico1:
+            df_status = df.groupby('status').size().reset_index(name='Contagem')
+            fig_status = px.pie(
+                df_status, 
+                values='Contagem', 
+                names='status', 
+                title='Distribuição por Status',
+                color_discrete_sequence=px.colors.qualitative.Pastel
+            )
+            st.plotly_chart(fig_status, use_container_width=True)
 
-            with col_grafico2:
-                df_obras = df.groupby('nome_obra').size().reset_index(name='Contagem')
-                fig_obras = px.pie(
-                    df_obras, 
-                    values='Contagem', 
-                    names='nome_obra', 
-                    title='Distribuição por Obra',
-                    color_discrete_sequence=px.colors.qualitative.Pastel
-                )
-                st.plotly_chart(fig_obras, use_container_width=True)
+        with col_grafico2:
+            df_obras = df.groupby('nome_obra').size().reset_index(name='Contagem')
+            fig_obras = px.pie(
+                df_obras, 
+                values='Contagem', 
+                names='nome_obra', 
+                title='Distribuição por Obra',
+                color_discrete_sequence=px.colors.qualitative.Pastel
+            )
+            st.plotly_chart(fig_obras, use_container_width=True)
         
         # --- TABELA DE VISUALIZAÇÃO ---
         st.markdown("---")
@@ -298,5 +327,3 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
             hide_index=True,
             use_container_width=True
         )
-
-# --- A PÁGINA 'ABRIR NOVO CHAMADO' FOI REMOVIDA, AGORA É UM POP-UP ---
