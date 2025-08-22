@@ -64,39 +64,38 @@ def editar_chamado_dialog():
         with st.form("editar_chamado_form"):
             responsavel = st.text_input("Responsável pela Análise", value=chamado_atual['responsavel_analise'] or "")
             
-            status_atual = chamado_atual['status']
-            st.markdown(f"**Status Atual:** `{status_atual}`")
-
-            new_status = status_atual
-            resultado = chamado_atual['resultado']
+            # Use o status do banco de dados para controlar o fluxo no pop-up
+            current_status = chamado_atual['status']
+            current_resultado = chamado_atual['resultado']
+            
+            # --- Lógica de Edição ---
+            new_status = current_status
+            new_resultado = current_resultado
             razao_negativa = chamado_atual['razao_negativa']
 
-            st.markdown("---")
-            st.write("Escolha a próxima etapa do fluxo:")
-
-            # Lógica para determinar as opções de avanço
-            if status_atual == "Novo":
-                step_options = st.radio("Ação", ["Aprovar", "Negar", "Manter como Novo"])
+            # Se o chamado está em fase de triagem (status 'Novo')
+            if current_status == "Novo":
+                st.markdown(f"**Status Atual:** `{current_status}`")
+                step_options = st.radio("Ação:", ["Aprovar", "Negar", "Manter como Novo"])
                 if step_options == "Aprovar":
-                    new_status = "Aprovado"
-                    resultado = "Aceito"
+                    new_status = "Em Andamento"
+                    new_resultado = "Aceito"
                 elif step_options == "Negar":
                     new_status = "Negado"
-                    resultado = "Negado"
+                    new_resultado = "Negado"
                 else:
                     new_status = "Novo"
-            elif status_atual == "Aprovado":
-                step_options = st.radio("Ação", ["Mover para 'Em Andamento'", "Marcar como 'Concluído'", "Manter Aprovado"])
-                if step_options == "Mover para 'Em Andamento'":
+            # Se o chamado já foi aprovado e está em execução
+            elif current_resultado == "Aceito":
+                st.markdown(f"**Status Atual:** `{current_status}`")
+                st.write("Ação:")
+                if st.button("Marcar como Concluído"):
+                    new_status = "Concluído"
+                if st.button("Marcar como Em Andamento"):
                     new_status = "Em Andamento"
-                elif step_options == "Marcar como 'Concluído'":
-                    new_status = "Concluído"
-            elif status_atual == "Em Andamento":
-                step_options = st.radio("Ação", ["Marcar como 'Concluído'", "Manter 'Em Andamento'"])
-                if step_options == "Marcar como 'Concluído'":
-                    new_status = "Concluído"
             else:
-                st.info("Este chamado já está em um status final (Concluído ou Negado) e não pode ser alterado.")
+                 # Chamados negados não podem ser alterados
+                st.info(f"Este chamado foi `{current_status}` e não pode ser alterado.")
             
             # Campo de justificativa se a negação for selecionada
             if new_status == "Negado":
@@ -104,13 +103,13 @@ def editar_chamado_dialog():
                 if not razao_negativa:
                     st.warning("A justificativa é obrigatória para chamados negados.")
             else:
-                razao_negativa = "" # Limpa a justificativa se o status não for negado
+                razao_negativa = ""
 
             if st.form_submit_button("Salvar Alterações"):
                 if new_status == "Negado" and not razao_negativa:
                     st.error("Por favor, preencha a justificativa para negar o chamado.")
                 else:
-                    db.atualizar_chamado(chamado_id_selecionado, new_status, responsavel, resultado, razao_negativa)
+                    db.atualizar_chamado(chamado_id_selecionado, new_status, responsavel, new_resultado, razao_negativa)
                     st.success(f"Chamado #{chamado_id_selecionado} atualizado com sucesso!")
                     st.rerun()
     else:
@@ -202,7 +201,7 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
             st.markdown(
                 f"<div style='background-color:#FFEBEE; padding:10px; border-radius:10px;'>"
                 f"<h3 style='color:#C62828; text-align:center;'>Negados</h3>"
-                f"<h1 style='color:#C62828; text-align:center;'>{num_negados}</h1>"
+                f"<h1 style='color:#C62828; text-align:center;'>{num_negados}</h1>
                 f"</div>", unsafe_allow_html=True
             )
 
