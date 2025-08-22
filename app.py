@@ -12,7 +12,7 @@ st.set_page_config(page_title="Gestor de Chamados e Obras", layout="wide")
 st.title("🚀 Gestor de Solicitações e Obras")
 
 # --- Gerenciamento de Estado da Página ---
-# Define a página inicial se ainda не estiver definida
+# Define a página inicial se ainda não estiver definida
 if 'pagina_ativa' not in st.session_state:
     st.session_state.pagina_ativa = "Visualizar Chamados"
 
@@ -31,7 +31,7 @@ def obra_dialog():
                 db.adicionar_obra(nome, endereco, cidade, estado)
                 st.success("Obra cadastrada com sucesso!") # Mensagem de sucesso
                 # O st.rerun() fecha o pop-up e atualiza a aplicação.
-                st.rerun() 
+                st.rerun()  
             else:
                 st.warning("Nome, Cidade e Estado são obrigatórios.")
 
@@ -56,12 +56,14 @@ if st.sidebar.button("📝 Abrir Novo Chamado", use_container_width=True):
 # --- Página: Visualizar Chamados (AGORA É A PADRÃO) ---
 if st.session_state.pagina_ativa == "Visualizar Chamados":
     st.subheader("📊 Painel de Acompanhamento de Chamados")
-    chamados = db.listar_chamados()
+    # A função listar_chamados agora retorna dois valores
+    chamados, colunas = db.listar_chamados()
 
     if not chamados:
         st.info("Nenhum chamado encontrado.")
     else:
-        df = pd.DataFrame(chamados, columns=[desc[0] for desc in db.get_db_connection().execute("PRAGMA table_info(chamados)").fetchall()])
+        # AQUI está a correção: use as colunas retornadas pela função
+        df = pd.DataFrame(chamados, columns=colunas)
         
         # Para melhorar a visualização, vamos buscar o nome da obra
         obras = db.listar_obras()
