@@ -66,13 +66,15 @@ def novo_chamado_dialog():
 
 @st.dialog("Editar Status do Chamado")
 def editar_chamado_dialog():
-    # Lista todos os chamados para que o usuário possa selecionar
+    # Lista todos os chamados que não estão concluídos
     chamados_disponiveis, _ = db.listar_chamados()
-    if not chamados_disponiveis:
+    chamados_filtrados = [c for c in chamados_disponiveis if c['status'] != 'Concluído']
+    
+    if not chamados_filtrados:
         st.error("Nenhum chamado disponível para edição.")
         return
 
-    opcoes_chamados = {f"ID {c['id']} - {c['titulo']}": c['id'] for c in chamados_disponiveis}
+    opcoes_chamados = {f"ID {c['id']} - {c['titulo']}": c['id'] for c in chamados_filtrados}
     chamado_selecionado_str = st.selectbox("Selecione o Chamado para Editar", options=opcoes_chamados.keys())
     
     if chamado_selecionado_str:
