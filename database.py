@@ -1,34 +1,35 @@
 # database.py
-import sqlite3
-from datetime import datetime
 
-DB_NAME = "chamados.db"
+import sqlite3
+import datetime
+
+DB_NAME = "dados.db"
+
+# --- FUNÇÕES DE CONEXÃO E INICIALIZAÇÃO ---
 
 def get_db_connection():
-    """Cria e retorna uma conexão com o banco de dados."""
+    """Cria uma conexão com o banco de dados."""
     conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = sqlite3.Row # Permite acessar as colunas como um dicionário
     return conn
 
 def init_db():
-    """Cria as tabelas do banco de dados se elas não existirem."""
+    """Cria as tabelas do banco de dados se elas ainda não existirem."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Tabela de Obras
+
+    # Tabela de obras
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS obras (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome_obra TEXT NOT NULL,
             endereco TEXT,
-            cidade TEXT,
-            estado TEXT
+            cidade TEXT NOT NULL,
+            estado TEXT NOT NULL
         )
     """)
-    
-    # Tabela de Chamados (adicionamos a coluna obra_id)
-    # CUIDADO: Em um projeto real, alterar uma tabela existente (ALTER TABLE) é mais complexo.
-    # Para este projeto, vamos assumir que estamos começando do zero ou podemos apagar o .db e recriá-lo.
+
+    # Tabela de chamados
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS chamados (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,16 +41,16 @@ def init_db():
             status TEXT NOT NULL,
             previsao_retorno TEXT,
             responsavel_analise TEXT,
-            data_analise TEXT,
             resultado TEXT,
             razao_negativa TEXT,
-            FOREIGN KEY (obra_id) REFERENCES obras (id)
+            FOREIGN KEY (obra_id) REFERENCES obras(id)
         )
     """)
+
     conn.commit()
     conn.close()
 
-# --- Funções para Obras ---
+# --- FUNÇÕES DE LÓGICA DE NEGÓCIO ---
 
 def adicionar_obra(nome, endereco, cidade, estado):
     """Adiciona uma nova obra ao banco de dados."""
@@ -63,21 +64,25 @@ def adicionar_obra(nome, endereco, cidade, estado):
     conn.close()
 
 def listar_obras():
-    """Retorna todas as obras do banco de dados."""
+    """Lista todas as obras cadastradas."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM obras ORDER BY nome_obra ASC")
+    cursor.execute("SELECT * FROM obras")
     obras = cursor.fetchall()
     conn.close()
     return obras
 
-# --- Funções para Chamados (MODIFICADA) ---
-
 def adicionar_chamado(obra_id, titulo, solicitante, descricao, previsao_retorno):
-    """Adiciona um novo chamado, agora vinculado a uma obra."""
+    """
+    Adiciona um novo chamado ao banco de dados.
+    A data da solicitação é gerada automaticamente aqui.
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
-    data_hoje = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # GERA a data atual aqui dentro da função
+    data_hoje = datetime.date.today().strftime("%Y-%m-%d")
+
     cursor.execute(
         "INSERT INTO chamados (obra_id, titulo, solicitante, data_solicitacao, descricao, status, previsao_retorno) VALUES (?, ?, ?, ?, ?, ?, ?)",
         (obra_id, titulo, solicitante, data_hoje, descricao, "Novo", previsao_retorno)
@@ -85,35 +90,33 @@ def adicionar_chamado(obra_id, titulo, solicitante, descricao, previsao_retorno)
     conn.commit()
     conn.close()
 
-# As outras funções (listar_chamados, atualizar_chamado, etc.) continuam iguais.
-# ... (mantenha as funções que já existiam aqui)
+
 def listar_chamados():
-    """Retorna todos os chamados do banco de dados."""
+    """Lista todos os chamados."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM chamados ORDER BY data_solicitacao DESC")
+    cursor.execute("SELECT * FROM chamados")
     chamados = cursor.fetchall()
     conn.close()
     return chamados
 
-def atualizar_chamado(chamado_id, status, responsavel, resultado, razao):
-    """Atualiza um chamado existente com os dados da análise."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    data_analise = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    cursor.execute("""
-        UPDATE chamados
-        SET status = ?, responsavel_analise = ?, data_analise = ?, resultado = ?, razao_negativa = ?
-        WHERE id = ?
-    """, (status, responsavel, data_analise, resultado, razao, chamado_id))
-    conn.commit()
-    conn.close()
 
 def get_chamado_by_id(chamado_id):
-    """Busca um chamado específico pelo seu ID."""
+    """Busca um chamado pelo ID."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM chamados WHERE id = ?", (chamado_id,))
     chamado = cursor.fetchone()
     conn.close()
     return chamado
+
+def atualizar_chamado(chamado_id, status, responsavel, resultado, razao_negativa):
+    """Atualiza o status e a análise de um chamado."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE chamados SET status = ?, responsavel_analise = ?, resultado = ?, razao_negativa = ? WHERE id = ?",
+        (status, responsavel, resultado, razao_negativa, chamado_id)
+    )
+    conn.commit()
+    conn.close()
