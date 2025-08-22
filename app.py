@@ -11,8 +11,12 @@ db.init_db()
 st.set_page_config(page_title="Gestor de Chamados e Obras", layout="wide")
 st.title("🚀 Gestor de Solicitações e Obras")
 
+# --- Gerenciamento de Estado da Página ---
+# Define a página inicial se ainda не estiver definida
+if 'pagina_ativa' not in st.session_state:
+    st.session_state.pagina_ativa = "Visualizar Chamados"
+
 # --- DEFINIÇÃO DO DIALOG (POP-UP) ---
-# Definimos a função do pop-up aqui, para que possa ser chamada pelo botão na barra lateral
 @st.dialog("Cadastro Rápido de Obra")
 def obra_dialog():
     with st.form("form_obra_popup"):
@@ -25,56 +29,32 @@ def obra_dialog():
         if st.form_submit_button("Cadastrar"):
             if nome and cidade and estado:
                 db.adicionar_obra(nome, endereco, cidade, estado)
-                # st.rerun() é crucial para recarregar a página e atualizar
-                # a lista de obras no formulário de chamados.
+                st.success("Obra cadastrada com sucesso!") # Mensagem de sucesso
+                # O st.rerun() fecha o pop-up e atualiza a aplicação.
                 st.rerun() 
             else:
                 st.warning("Nome, Cidade e Estado são obrigatórios.")
 
 # --- BARRA LATERAL (SIDEBAR) ---
-
 st.sidebar.title("Menu")
+
 # Botão para o pop-up de cadastro de obra
-if st.sidebar.button("🏗️ Cadastrar Nova Obra"):
+if st.sidebar.button("🏗️ Cadastrar Nova Obra", use_container_width=True):
     obra_dialog()
 
-st.sidebar.markdown("---") # Uma linha divisória para organizar
+st.sidebar.markdown("---") 
 
-# Menu de navegação principal
-choice = st.sidebar.selectbox("Navegar para", ["Abrir Novo Chamado", "Visualizar Chamados"])
+# Botões de navegação que alteram o estado da página
+if st.sidebar.button("📊 Visualizar Chamados", use_container_width=True):
+    st.session_state.pagina_ativa = "Visualizar Chamados"
+if st.sidebar.button("📝 Abrir Novo Chamado", use_container_width=True):
+    st.session_state.pagina_ativa = "Abrir Novo Chamado"
 
 
-# --- CONTEÚDO PRINCIPAL DA PÁGINA ---
+# --- CONTEÚDO PRINCIPAL DA PÁGINA (Controlado pelo st.session_state) ---
 
-# --- Página: Abrir Novo Chamado ---
-if choice == "Abrir Novo Chamado":
-    st.subheader("📝 Formulário de Nova Solicitação")
-    
-    # Busca a lista de obras cadastradas para o selectbox
-    obras = db.listar_obras()
-    
-    if not obras:
-        st.warning("Nenhuma obra cadastrada. Cadastre uma obra na barra lateral antes de abrir um chamado.")
-    else:
-        opcoes_obras = {f"{obra['id']} - {obra['nome_obra']}": obra['id'] for obra in obras}
-
-        with st.form("novo_chamado_form", clear_on_submit=True):
-            
-            obra_selecionada_str = st.selectbox("Selecione a Obra Relacionada", options=opcoes_obras.keys())
-            
-            titulo = st.text_input("Título do Chamado")
-            solicitante = st.text_input("Seu Nome/Email")
-            descricao = st.text_area("Descrição detalhada da alteração")
-            previsao_retorno = st.date_input("Previsão de Retorno Desejada", min_value=date.today())
-
-            submitted = st.form_submit_button("Enviar Solicitação")
-            if submitted:
-                obra_id = opcoes_obras[obra_selecionada_str]
-                db.adicionar_chamado(obra_id, titulo, solicitante, descricao, previsao_retorno.strftime("%Y-%m-%d"))
-                st.success("Chamado enviado com sucesso!")
-
-# --- Página: Visualizar Chamados ---
-elif choice == "Visualizar Chamados":
+# --- Página: Visualizar Chamados (AGORA É A PADRÃO) ---
+if st.session_state.pagina_ativa == "Visualizar Chamados":
     st.subheader("📊 Painel de Acompanhamento de Chamados")
     chamados = db.listar_chamados()
 
@@ -86,9 +66,10 @@ elif choice == "Visualizar Chamados":
         # Para melhorar a visualização, vamos buscar o nome da obra
         obras = db.listar_obras()
         mapa_obras = {obra['id']: obra['nome_obra'] for obra in obras}
-        df['nome_obra'] = df['obra_id'].map(mapa_obras)
+        df['nome_obra'] = df['obra_id'].map(mapa_obras).fillna("Obra não encontrada")
         
-        st.dataframe(df[['id', 'titulo', 'nome_obra', 'solicitante', 'status', 'data_solicitacao']], use_container_width=True)
+        # Reordenando para melhor visualização
+        st.dataframe(df[['id', 'titulo', 'nome_obra', 'solicitante', 'status', 'data_solicitacao', 'previsao_retorno']], use_container_width=True)
 
         st.markdown("---")
         st.subheader("🔍 Analisar e Atualizar um Chamado")
@@ -101,7 +82,7 @@ elif choice == "Visualizar Chamados":
             with st.form(f"analise_form_{chamado_id_selecionado}", clear_on_submit=True):
                 st.write(f"**Analisando Chamado #{chamado_atual['id']} - {chamado_atual['titulo']}**")
                 
-                responsavel = st.text_input("Responsável pela Análise")
+                responsavel = st.text_input("Responsável pela Análise", value=chamado_atual['responsavel_analise'] or "")
                 status_opcoes = ["Novo", "Em Análise", "Aprovado", "Negado", "Concluído"]
                 status_atual = chamado_atual['status'] if chamado_atual['status'] in status_opcoes else "Novo"
                 status = st.selectbox("Novo Status", options=status_opcoes, index=status_opcoes.index(status_atual))
@@ -112,9 +93,31 @@ elif choice == "Visualizar Chamados":
 
                 razao_negativa = st.text_area("Justificativa (se negado)", value=chamado_atual['razao_negativa'] or "")
 
-                update_button = st.form_submit_button("Salvar Análise")
-
-                if update_button:
+                if st.form_submit_button("Salvar Análise"):
                     db.atualizar_chamado(chamado_id_selecionado, status, responsavel, resultado, razao_negativa)
                     st.success(f"Chamado #{chamado_id_selecionado} atualizado com sucesso!")
                     st.rerun()
+
+# --- Página: Abrir Novo Chamado ---
+elif st.session_state.pagina_ativa == "Abrir Novo Chamado":
+    st.subheader("📝 Formulário de Nova Solicitação")
+    
+    obras = db.listar_obras()
+    
+    if not obras:
+        st.warning("Nenhuma obra cadastrada. Clique em 'Cadastrar Nova Obra' na barra lateral para começar.")
+    else:
+        opcoes_obras = {f"{obra['id']} - {obra['nome_obra']}": obra['id'] for obra in obras}
+
+        with st.form("novo_chamado_form", clear_on_submit=True):
+            
+            obra_selecionada_str = st.selectbox("Selecione a Obra Relacionada", options=opcoes_obras.keys())
+            titulo = st.text_input("Título do Chamado")
+            solicitante = st.text_input("Seu Nome/Email")
+            descricao = st.text_area("Descrição detalhada da alteração")
+            previsao_retorno = st.date_input("Previsão de Retorno Desejada", min_value=date.today())
+
+            if st.form_submit_button("Enviar Solicitação"):
+                obra_id = opcoes_obras[obra_selecionada_str]
+                db.adicionar_chamado(obra_id, titulo, solicitante, descricao, previsao_retorno.strftime("%Y-%m-%d"))
+                st.success("Chamado enviado com sucesso!")
