@@ -193,6 +193,9 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
         st.markdown("---")
         st.subheader("Visão Geral do Status dos Chamados")
         
+        # Converte as colunas de data para o tipo datetime, ignorando erros
+        df['previsao_retorno'] = pd.to_datetime(df['previsao_retorno'], errors='coerce')
+        
         # Contagem para os novos cards
         num_na_fila = len(df[df['status'] == 'Na Fila de Espera'])
         num_em_andamento = len(df[df['status'] == 'Em Andamento'])
@@ -203,8 +206,11 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
         num_abertos = len(df_abertos)
         
         hoje = pd.to_datetime(date.today())
-        num_no_prazo = len(df_abertos[df_abertos['previsao_retorno'] >= hoje])
-        num_atrasados = len(df_abertos[df_abertos['previsao_retorno'] < hoje])
+        
+        # Contagem corrigida para "No Prazo" e "Atrasados"
+        df_abertos_com_prazo = df_abertos.dropna(subset=['previsao_retorno'])
+        num_no_prazo = len(df_abertos_com_prazo[df_abertos_com_prazo['previsao_retorno'] >= hoje])
+        num_atrasados = len(df_abertos_com_prazo[df_abertos_com_prazo['previsao_retorno'] < hoje])
 
         # Estilos CSS embutidos
         st.markdown("""
