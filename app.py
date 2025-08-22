@@ -22,6 +22,8 @@ if 'pagina_ativa' not in st.session_state:
     st.session_state.pagina_ativa = "Visualizar Chamados"
 if 'chamado_selecionado_id' not in st.session_state:
     st.session_state.chamado_selecionado_id = None
+if 'confirm_clean' not in st.session_state:
+    st.session_state.confirm_clean = False
 
 # --- DEFINIÇÃO DOS DIALOGS (POP-UPS) ---
 @st.dialog("Cadastro Rápido de Obra")
@@ -155,9 +157,15 @@ if st.sidebar.button("📝 Editar Chamado", use_container_width=True):
 # Botão para limpar o banco de dados
 st.sidebar.markdown("---")
 st.sidebar.markdown("### Administração")
+
+# Lógica de confirmação para o botão de limpeza
 if st.sidebar.button("🗑️ Limpar Banco de Dados", use_container_width=True):
-    if st.sidebar.columns(1)[0].button("Confirma Limpar?", type="secondary", key="confirm_clean"):
+    st.session_state.confirm_clean = True
+if st.session_state.confirm_clean:
+    st.sidebar.warning("Tem certeza? Esta ação é irreversível.")
+    if st.sidebar.button("Confirmar Limpeza", type="secondary", use_container_width=True):
         db.limpar_db()
+        st.session_state.confirm_clean = False
         st.success("Banco de dados limpo com sucesso! A página será recarregada.")
         st.rerun()
 
