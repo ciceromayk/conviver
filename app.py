@@ -73,10 +73,10 @@ def editar_chamado_dialog():
             new_resultado = current_resultado
             razao_negativa = chamado_atual['razao_negativa']
 
-            # Se o chamado está em fase de triagem (status 'Novo')
-            if current_status == "Novo":
+            # Se o chamado está em fase de triagem (status 'Na Fila de Espera')
+            if current_status == "Na Fila de Espera":
                 st.markdown(f"**Status Atual:** `{current_status}`")
-                step_options = st.radio("Ação:", ["Aprovar", "Negar", "Manter como Novo"], index=2)
+                step_options = st.radio("Ação:", ["Aprovar", "Negar", "Manter na Fila de Espera"], index=2)
                 if step_options == "Aprovar":
                     new_status = "Aprovado"
                     new_resultado = "Aceito"
@@ -84,7 +84,7 @@ def editar_chamado_dialog():
                     new_status = "Negado"
                     new_resultado = "Negado"
                 else:
-                    new_status = "Novo"
+                    new_status = "Na Fila de Espera"
             # Se o chamado já foi aprovado e está em execução
             elif current_resultado == "Aceito":
                 st.markdown(f"**Status Atual:** `{current_status}`")
