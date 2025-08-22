@@ -78,7 +78,7 @@ def editar_chamado_dialog():
                 st.markdown(f"**Status Atual:** `{current_status}`")
                 step_options = st.radio("Ação:", ["Aprovar", "Negar", "Manter como Novo"])
                 if step_options == "Aprovar":
-                    new_status = "Em Andamento"
+                    new_status = "Aprovado"
                     new_resultado = "Aceito"
                 elif step_options == "Negar":
                     new_status = "Negado"
@@ -201,8 +201,7 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
             st.markdown(
                 f"<div style='background-color:#FFEBEE; padding:10px; border-radius:10px;'>"
                 f"<h3 style='color:#C62828; text-align:center;'>Negados</h3>"
-                f"<h1 style='color:#C62828; text-align:center;'>{num_negados}</h1>
-                f"</div>", unsafe_allow_html=True
+                f"<h1 style='color:#C62828; text-align:center;'>{num_negados}</h1></div>", unsafe_allow_html=True
             )
 
 
