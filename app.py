@@ -20,6 +20,8 @@ if 'chamado_selecionado_id' not in st.session_state:
     st.session_state.chamado_selecionado_id = None
 if 'df_chamados' not in st.session_state:
     st.session_state.df_chamados = pd.DataFrame()
+if 'last_selected_rows' not in st.session_state:
+    st.session_state.last_selected_rows = []
 
 # --- DEFINIÇÃO DO DIALOG (POP-UP) ---
 @st.dialog("Cadastro Rápido de Obra")
@@ -151,14 +153,13 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
         
         
         # --- FUNÇÃO DE CALLBACK PARA A SELEÇÃO ---
-        def handle_selection():
+        def handle_selection_change():
             selection = st.session_state.data_editor_chamados.get('selection', {}).get('rows', [])
             if selection:
-                # O índice de seleção se refere ao DataFrame exibido, não ao original.
-                # Use iloc para pegar a linha correta
                 selected_row_index = selection[0]
-                selected_id = df.iloc[selected_row_index]['id']
-                st.session_state.chamado_selecionado_id = selected_id
+                if selected_row_index in st.session_state.df_chamados.index:
+                    selected_id = st.session_state.df_chamados.iloc[selected_row_index]['id']
+                    st.session_state.chamado_selecionado_id = selected_id
             else:
                 st.session_state.chamado_selecionado_id = None
             st.rerun()
@@ -185,7 +186,7 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
                 "previsao_retorno": "Previsão de Retorno"
             },
             key='data_editor_chamados',
-            on_change=handle_selection
+            on_change=handle_selection_change
         )
         
         st.markdown("---")
