@@ -92,13 +92,18 @@ def adicionar_chamado(obra_id, titulo, solicitante, descricao, previsao_retorno)
 
 
 def listar_chamados():
-    """Lista todos os chamados."""
+    """
+    Lista todos os chamados e retorna os dados
+    juntamente com os nomes das colunas.
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM chamados")
+    # Retorna uma lista de tuplas, onde a primeira tupla é o nome das colunas
+    colunas = [descricao[0] for descricao in cursor.description]
     chamados = cursor.fetchall()
     conn.close()
-    return chamados
+    return chamados, colunas
 
 
 def get_chamado_by_id(chamado_id):
