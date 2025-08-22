@@ -86,9 +86,11 @@ def editar_chamado_dialog():
                 else:
                     new_status = "Novo"
             elif status_atual == "Aprovado":
-                step_options = st.radio("Ação", ["Mover para 'Em Andamento'", "Manter Aprovado"])
+                step_options = st.radio("Ação", ["Mover para 'Em Andamento'", "Marcar como 'Concluído'", "Manter Aprovado"])
                 if step_options == "Mover para 'Em Andamento'":
                     new_status = "Em Andamento"
+                elif step_options == "Marcar como 'Concluído'":
+                    new_status = "Concluído"
             elif status_atual == "Em Andamento":
                 step_options = st.radio("Ação", ["Marcar como 'Concluído'", "Manter 'Em Andamento'"])
                 if step_options == "Marcar como 'Concluído'":
