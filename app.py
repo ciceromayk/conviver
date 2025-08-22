@@ -1,3 +1,4 @@
+# app.py
 import streamlit as st
 import pandas as pd
 from datetime import date
@@ -9,7 +10,11 @@ db.init_db()
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Gestor de Chamados e Obras", layout="wide")
-st.title("🚀 Gestor de Solicitações e Obras")
+
+# Adiciona um título e uma descrição estilizados
+st.markdown("<h1 style='text-align: center; color: #00796B;'>🚀 Gestor de Solicitações e Obras</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #616161;'>Otimize o controle e acompanhamento de chamados e obras da sua empresa.</p>", unsafe_allow_html=True)
+st.markdown("---")
 
 # --- Gerenciamento de Estado da Página ---
 # Define a página inicial se ainda não estiver definida
@@ -125,30 +130,30 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
 
         # --- GRÁFICOS ---
         st.markdown("---")
-        st.subheader("Análise Gráfica")
-        col_grafico1, col_grafico2 = st.columns(2)
+        with st.expander("📈 Análise Gráfica", expanded=True):
+            col_grafico1, col_grafico2 = st.columns(2)
 
-        with col_grafico1:
-            df_status = df.groupby('status').size().reset_index(name='Contagem')
-            fig_status = px.pie(
-                df_status, 
-                values='Contagem', 
-                names='status', 
-                title='Distribuição por Status',
-                color_discrete_sequence=px.colors.qualitative.Pastel
-            )
-            st.plotly_chart(fig_status, use_container_width=True)
+            with col_grafico1:
+                df_status = df.groupby('status').size().reset_index(name='Contagem')
+                fig_status = px.pie(
+                    df_status, 
+                    values='Contagem', 
+                    names='status', 
+                    title='Distribuição por Status',
+                    color_discrete_sequence=px.colors.qualitative.Pastel
+                )
+                st.plotly_chart(fig_status, use_container_width=True)
 
-        with col_grafico2:
-            df_obras = df.groupby('nome_obra').size().reset_index(name='Contagem')
-            fig_obras = px.pie(
-                df_obras, 
-                values='Contagem', 
-                names='nome_obra', 
-                title='Distribuição por Obra',
-                color_discrete_sequence=px.colors.qualitative.Pastel
-            )
-            st.plotly_chart(fig_obras, use_container_width=True)
+            with col_grafico2:
+                df_obras = df.groupby('nome_obra').size().reset_index(name='Contagem')
+                fig_obras = px.pie(
+                    df_obras, 
+                    values='Contagem', 
+                    names='nome_obra', 
+                    title='Distribuição por Obra',
+                    color_discrete_sequence=px.colors.qualitative.Pastel
+                )
+                st.plotly_chart(fig_obras, use_container_width=True)
         
         
         # --- FUNÇÃO DE CALLBACK PARA A SELEÇÃO ---
@@ -165,61 +170,58 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
 
         # --- TABELA INTERATIVA E FORMULÁRIO DE EDIÇÃO ---
         st.markdown("---")
-        st.subheader("Tabela de Chamados")
-        st.markdown("Selecione um chamado na tabela para analisar.")
-        
-        # st.data_editor com o callback
-        edited_df = st.data_editor(
-            df[['id', 'titulo', 'nome_obra', 'solicitante', 'status', 'data_solicitacao', 'previsao_retorno']],
-            hide_index=True,
-            use_container_width=True,
-            column_order=('id', 'titulo', 'nome_obra', 'solicitante', 'status', 'data_solicitacao', 'previsao_retorno'),
-            disabled=df.columns, # Desabilita edição direta na tabela
-            column_config={
-                "id": st.column_config.NumberColumn(label="ID", help="Identificador único do chamado"),
-                "titulo": "Título",
-                "nome_obra": "Obra",
-                "solicitante": "Solicitante",
-                "status": "Status",
-                "data_solicitacao": "Data da Solicitação",
-                "previsao_retorno": "Previsão de Retorno"
-            },
-            key='data_editor_chamados',
-            on_change=handle_selection_change
-        )
-        
-        st.markdown("---")
-        st.subheader("🔍 Analisar e Atualizar um Chamado")
-        
-        # Agora o formulário só aparece se um chamado for selecionado
-        if st.session_state.chamado_selecionado_id:
-            chamado_id_selecionado = st.session_state.chamado_selecionado_id
-            chamado_atual = db.get_chamado_by_id(chamado_id_selecionado)
+        with st.expander("📝 Gerenciar e Editar Chamados", expanded=True):
+            st.markdown("Selecione um chamado na tabela para analisar.")
             
-            if chamado_atual:
-                with st.form(f"analise_form_{chamado_id_selecionado}", clear_on_submit=True):
-                    st.write(f"**Analisando Chamado #{chamado_atual['id']} - {chamado_atual['titulo']}**")
-                    
-                    responsavel = st.text_input("Responsável pela Análise", value=chamado_atual['responsavel_analise'] or "")
-                    status_opcoes = ["Novo", "Em Análise", "Aprovado", "Negado", "Concluído"]
-                    status_atual = chamado_atual['status'] if chamado_atual['status'] in status_opcoes else "Novo"
-                    status = st.selectbox("Novo Status", options=status_opcoes, index=status_opcoes.index(status_atual))
-                    
-                    resultado_opcoes = ["", "Aceito", "Negado"]
-                    resultado_atual = chamado_atual['resultado'] if chamado_atual['resultado'] else ""
-                    resultado = st.selectbox("Resultado Final", options=resultado_opcoes, index=resultado_opcoes.index(resultado_atual))
-
-                    razao_negativa = st.text_area("Justificativa (se negado)", value=chamado_atual['razao_negativa'] or "")
-
-                    if st.form_submit_button("Salvar Análise"):
-                        db.atualizar_chamado(chamado_id_selecionado, status, responsavel, resultado, razao_negativa)
-                        st.success(f"Chamado #{chamado_id_selecionado} atualizado com sucesso!")
-                        st.session_state.chamado_selecionado_id = None # Limpa a seleção
-                        st.rerun()
+            # st.data_editor com o callback
+            edited_df = st.data_editor(
+                df[['id', 'titulo', 'nome_obra', 'solicitante', 'status', 'data_solicitacao', 'previsao_retorno']],
+                hide_index=True,
+                use_container_width=True,
+                column_order=('id', 'titulo', 'nome_obra', 'solicitante', 'status', 'data_solicitacao', 'previsao_retorno'),
+                disabled=df.columns, # Desabilita edição direta na tabela
+                column_config={
+                    "id": st.column_config.NumberColumn(label="ID", help="Identificador único do chamado"),
+                    "titulo": "Título",
+                    "nome_obra": "Obra",
+                    "solicitante": "Solicitante",
+                    "status": "Status",
+                    "data_solicitacao": "Data da Solicitação",
+                    "previsao_retorno": "Previsão de Retorno"
+                },
+                key='data_editor_chamados',
+                on_change=handle_selection_change
+            )
+            
+            st.markdown("---")
+            if st.session_state.chamado_selecionado_id:
+                chamado_id_selecionado = st.session_state.chamado_selecionado_id
+                chamado_atual = db.get_chamado_by_id(chamado_id_selecionado)
+                
+                if chamado_atual:
+                    with st.form(f"analise_form_{chamado_id_selecionado}", clear_on_submit=True):
+                        st.write(f"**Analisando Chamado #{chamado_atual['id']} - {chamado_atual['titulo']}**")
+                        
+                        responsavel = st.text_input("Responsável pela Análise", value=chamado_atual['responsavel_analise'] or "")
+                        status_opcoes = ["Novo", "Em Análise", "Aprovado", "Negado", "Concluído"]
+                        status_atual = chamado_atual['status'] if chamado_atual['status'] in status_opcoes else "Novo"
+                        status = st.selectbox("Novo Status", options=status_opcoes, index=status_opcoes.index(status_atual))
+                        
+                        resultado_opcoes = ["", "Aceito", "Negado"]
+                        resultado_atual = chamado_atual['resultado'] if chamado_atual['resultado'] else ""
+                        resultado = st.selectbox("Resultado Final", options=resultado_opcoes, index=resultado_opcoes.index(resultado_atual))
+    
+                        razao_negativa = st.text_area("Justificativa (se negado)", value=chamado_atual['razao_negativa'] or "")
+    
+                        if st.form_submit_button("Salvar Análise"):
+                            db.atualizar_chamado(chamado_id_selecionado, status, responsavel, resultado, razao_negativa)
+                            st.success(f"Chamado #{chamado_id_selecionado} atualizado com sucesso!")
+                            st.session_state.chamado_selecionado_id = None # Limpa a seleção
+                            st.rerun()
+                else:
+                    st.warning("Chamado selecionado não encontrado.")
             else:
-                st.warning("Chamado selecionado não encontrado.")
-        else:
-            st.info("Selecione um chamado na tabela acima para editar.")
+                st.info("Selecione um chamado na tabela acima para editar.")
 
 # --- Página: Abrir Novo Chamado ---
 elif st.session_state.pagina_ativa == "Abrir Novo Chamado":
