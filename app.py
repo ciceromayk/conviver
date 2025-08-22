@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 import database as db # Importa nosso módulo de banco de dados
+import plotly.express as px
 
 # Inicializa o banco de dados e as tabelas
 db.init_db()
@@ -17,6 +18,8 @@ if 'pagina_ativa' not in st.session_state:
     st.session_state.pagina_ativa = "Visualizar Chamados"
 if 'chamado_selecionado_id' not in st.session_state:
     st.session_state.chamado_selecionado_id = None
+if 'df_chamados' not in st.session_state:
+    st.session_state.df_chamados = pd.DataFrame()
 
 # --- DEFINIÇÃO DO DIALOG (POP-UP) ---
 @st.dialog("Cadastro Rápido de Obra")
@@ -67,6 +70,7 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
     else:
         # Cria o DataFrame com os dados e colunas corretos
         df = pd.DataFrame(chamados, columns=colunas)
+        st.session_state.df_chamados = df # Guarda o DataFrame no estado da sessão
         
         # Para melhorar a visualização, vamos buscar o nome da obra
         obras = db.listar_obras()
@@ -97,11 +101,26 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
         
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric(label="Chamados em Aberto", value=num_abertos)
+            st.markdown(
+                f"<div style='background-color:#E0F7FA; padding:10px; border-radius:10px;'>"
+                f"<h3 style='color:#00796B; text-align:center;'>Chamados em Aberto</h3>"
+                f"<h1 style='color:#00796B; text-align:center;'>{num_abertos}</h1>"
+                f"</div>", unsafe_allow_html=True
+            )
         with col2:
-            st.metric(label="Chamados Concluídos", value=num_resolvidos)
+            st.markdown(
+                f"<div style='background-color:#E8F5E9; padding:10px; border-radius:10px;'>"
+                f"<h3 style='color:#2E7D32; text-align:center;'>Chamados Concluídos</h3>"
+                f"<h1 style='color:#2E7D32; text-align:center;'>{num_resolvidos}</h1>"
+                f"</div>", unsafe_allow_html=True
+            )
         with col3:
-            st.metric(label="Chamados Atrasados", value=num_atrasados)
+            st.markdown(
+                f"<div style='background-color:#FBE9E7; padding:10px; border-radius:10px;'>"
+                f"<h3 style='color:#D84315; text-align:center;'>Chamados Atrasados</h3>"
+                f"<h1 style='color:#D84315; text-align:center;'>{num_atrasados}</h1>"
+                f"</div>", unsafe_allow_html=True
+            )
 
         # --- GRÁFICOS ---
         st.markdown("---")
@@ -109,14 +128,41 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
         col_grafico1, col_grafico2 = st.columns(2)
 
         with col_grafico1:
-            st.bar_chart(df.groupby('status').size().rename("Contagem"))
-            st.markdown("<p style='text-align: center;'>Chamados por Status</p>", unsafe_allow_html=True)
+            df_status = df.groupby('status').size().reset_index(name='Contagem')
+            fig_status = px.pie(
+                df_status, 
+                values='Contagem', 
+                names='status', 
+                title='Distribuição por Status',
+                color_discrete_sequence=px.colors.qualitative.Pastel
+            )
+            st.plotly_chart(fig_status, use_container_width=True)
 
         with col_grafico2:
-            st.bar_chart(df.groupby('nome_obra').size().rename("Contagem"))
-            st.markdown("<p style='text-align: center;'>Chamados por Obra</p>", unsafe_allow_html=True)
+            df_obras = df.groupby('nome_obra').size().reset_index(name='Contagem')
+            fig_obras = px.pie(
+                df_obras, 
+                values='Contagem', 
+                names='nome_obra', 
+                title='Distribuição por Obra',
+                color_discrete_sequence=px.colors.qualitative.Pastel
+            )
+            st.plotly_chart(fig_obras, use_container_width=True)
         
         
+        # --- FUNÇÃO DE CALLBACK PARA A SELEÇÃO ---
+        def handle_selection():
+            selection = st.session_state.data_editor_chamados.get('selection', {}).get('rows', [])
+            if selection:
+                # O índice de seleção se refere ao DataFrame exibido, não ao original.
+                # Use iloc para pegar a linha correta
+                selected_row_index = selection[0]
+                selected_id = df.iloc[selected_row_index]['id']
+                st.session_state.chamado_selecionado_id = selected_id
+            else:
+                st.session_state.chamado_selecionado_id = None
+            st.rerun()
+
         # --- TABELA INTERATIVA E FORMULÁRIO DE EDIÇÃO ---
         st.markdown("---")
         st.subheader("Tabela de Chamados")
@@ -138,26 +184,10 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
                 "data_solicitacao": "Data da Solicitação",
                 "previsao_retorno": "Previsão de Retorno"
             },
-            # Adicionando a seleção
-            key='data_editor_chamados'
+            key='data_editor_chamados',
+            on_change=handle_selection
         )
         
-        # --- NOVO CÓDIGO PARA TRATAR A SELEÇÃO ---
-        selection = st.session_state.data_editor_chamados.get('selection', {})
-        selected_rows = selection.get('rows', [])
-
-        if selected_rows:
-            # Pega o ID da linha selecionada
-            selected_id = edited_df.loc[selected_rows[0], 'id']
-            if selected_id != st.session_state.chamado_selecionado_id:
-                st.session_state.chamado_selecionado_id = selected_id
-                st.rerun() # Reinicia para carregar os dados
-        else:
-            # Limpa a seleção se nenhuma linha estiver selecionada
-            if st.session_state.chamado_selecionado_id is not None:
-                st.session_state.chamado_selecionado_id = None
-                st.rerun()
-
         st.markdown("---")
         st.subheader("🔍 Analisar e Atualizar um Chamado")
         
