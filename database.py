@@ -50,6 +50,16 @@ def init_db():
     conn.commit()
     conn.close()
 
+def limpar_db():
+    """Limpa todos os registros das tabelas."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM chamados")
+    cursor.execute("DELETE FROM obras")
+    conn.commit()
+    conn.close()
+
+
 # --- FUNÇÕES DE LÓGICA DE NEGÓCIO ---
 
 def adicionar_obra(nome, endereco, cidade, estado):
@@ -85,7 +95,7 @@ def adicionar_chamado(obra_id, titulo, solicitante, descricao, previsao_retorno)
 
     cursor.execute(
         "INSERT INTO chamados (obra_id, titulo, solicitante, data_solicitacao, descricao, status, previsao_retorno) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (obra_id, titulo, solicitante, data_hoje, descricao, "Novo", previsao_retorno)
+        (obra_id, titulo, solicitante, data_hoje, descricao, "Na Fila de Espera", previsao_retorno)
     )
     conn.commit()
     conn.close()
