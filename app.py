@@ -1,137 +1,276 @@
-# database.py
+# app.py
+import streamlit as st
+import pandas as pd
+from datetime import date
+import database as db # Importa nosso módulo de banco de dados
+import plotly.express as px
 
-import sqlite3
-import datetime
+# Inicializa o banco de dados e as tabelas
+db.init_db()
 
-DB_NAME = "dados.db"
+# --- CONFIGURAÇÃO DA PÁGINA ---
+st.set_page_config(page_title="Gestor de Chamados e Obras", layout="wide")
 
-# --- FUNÇÕES DE CONEXÃO E INICIALIZAÇÃO ---
+# Adiciona um título e uma descrição estilizados
+st.markdown("<h1 style='text-align: center; color: #00796B;'>🚀 Gestor de Solicitações e Obras</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #616161;'>Otimize o controle e acompanhamento de chamados e obras da sua empresa.</p>", unsafe_allow_html=True)
+st.markdown("---")
 
-def get_db_connection():
-    """Cria uma conexão com o banco de dados."""
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row # Permite acessar as colunas como um dicionário
-    return conn
+# --- Gerenciamento de Estado da Página ---
+# Define a página inicial se ainda não estiver definida
+if 'pagina_ativa' not in st.session_state:
+    st.session_state.pagina_ativa = "Visualizar Chamados"
+if 'chamado_selecionado_id' not in st.session_state:
+    st.session_state.chamado_selecionado_id = None
 
-def init_db():
-    """Cria as tabelas do banco de dados se elas ainda não existirem."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+# --- DEFINIÇÃO DOS DIALOGS (POP-UPS) ---
+@st.dialog("Cadastro Rápido de Obra")
+def obra_dialog():
+    with st.form("form_obra_popup"):
+        st.write("Preencha os dados da nova obra.")
+        nome = st.text_input("Nome da Obra")
+        endereco = st.text_input("Endereço")
+        cidade = st.text_input("Cidade")
+        estado = st.text_input("Estado (UF)")
+        
+        if st.form_submit_button("Cadastrar"):
+            if nome and cidade and estado:
+                db.adicionar_obra(nome, endereco, cidade, estado)
+                st.success("Obra cadastrada com sucesso!") # Mensagem de sucesso
+                st.rerun()  
+            else:
+                st.warning("Nome, Cidade e Estado são obrigatórios.")
 
-    # Tabela de obras
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS obras (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome_obra TEXT NOT NULL,
-            endereco TEXT,
-            cidade TEXT NOT NULL,
-            estado TEXT NOT NULL
+@st.dialog("Abrir Novo Chamado")
+def novo_chamado_dialog():
+    obras = db.listar_obras()
+    
+    if not obras:
+        st.warning("Nenhuma obra cadastrada. Clique em 'Cadastrar Nova Obra' na barra lateral para começar.")
+    else:
+        opcoes_obras = {f"{obra['id']} - {obra['nome_obra']}": obra['id'] for obra in obras}
+
+        with st.form("novo_chamado_form", clear_on_submit=True):
+            st.write("Preencha os dados da nova solicitação.")
+            obra_selecionada_str = st.selectbox("Selecione a Obra Relacionada", options=opcoes_obras.keys())
+            titulo = st.text_input("Título do Chamado")
+            solicitante = st.text_input("Seu Nome/Email")
+            descricao = st.text_area("Descrição detalhada da alteração")
+            previsao_retorno = st.date_input("Previsão de Retorno Desejada", min_value=date.today())
+
+            if st.form_submit_button("Enviar Solicitação"):
+                obra_id = opcoes_obras[obra_selecionada_str]
+                db.adicionar_chamado(obra_id, titulo, solicitante, descricao, previsao_retorno.strftime("%Y-%m-%d"))
+                st.success("Chamado enviado com sucesso!")
+                st.rerun()
+
+@st.dialog("Editar Status do Chamado")
+def editar_chamado_dialog():
+    # Lista todos os chamados que não estão concluídos
+    chamados_disponiveis, _ = db.listar_chamados()
+    chamados_filtrados = [c for c in chamados_disponiveis if c['status'] != 'Concluído']
+    
+    if not chamados_filtrados:
+        st.error("Nenhum chamado disponível para edição.")
+        return
+
+    opcoes_chamados = {f"ID {c['id']} - {c['titulo']}": c['id'] for c in chamados_filtrados}
+    chamado_selecionado_str = st.selectbox("Selecione o Chamado para Editar", options=opcoes_chamados.keys())
+    
+    if chamado_selecionado_str:
+        chamado_id_selecionado = opcoes_chamados[chamado_selecionado_str]
+        chamado_atual = db.get_chamado_by_id(chamado_id_selecionado)
+
+        if not chamado_atual:
+            st.error("Chamado não encontrado.")
+            return
+
+        st.markdown(f"**Detalhes do Chamado #{chamado_atual['id']}**")
+        with st.form("editar_chamado_form"):
+            responsavel = st.text_input("Responsável pela Análise", value=chamado_atual['responsavel_analise'] or "")
+            
+            # Use o status do banco de dados para controlar o fluxo no pop-up
+            current_status = chamado_atual['status']
+            current_resultado = chamado_atual['resultado']
+            
+            # --- Lógica de Edição ---
+            new_status = current_status
+            new_resultado = current_resultado
+            razao_negativa = chamado_atual['razao_negativa']
+
+            # Se o chamado está em fase de triagem (status 'Na Fila de Espera')
+            if current_status == "Na Fila de Espera":
+                st.markdown(f"**Status Atual:** `{current_status}`")
+                step_options = st.radio("Ação:", ["Aprovar", "Negar", "Manter na Fila de Espera"], index=2)
+                if step_options == "Aprovar":
+                    new_status = "Aprovado"
+                    new_resultado = "Aceito"
+                elif step_options == "Negar":
+                    new_status = "Negado"
+                    new_resultado = "Negado"
+                else:
+                    new_status = "Na Fila de Espera"
+            # Se o chamado já foi aprovado e está em execução
+            elif current_resultado == "Aceito":
+                st.markdown(f"**Status Atual:** `{current_status}`")
+                st.write("Ação:")
+                step_options = st.radio("Ação:", ["Mover para Em Andamento", "Marcar como Concluído", "Manter Status Atual"])
+                if step_options == "Marcar como Concluído":
+                    new_status = "Concluído"
+                if step_options == "Mover para Em Andamento":
+                    new_status = "Em Andamento"
+            else:
+                 # Chamados negados não podem ser alterados
+                st.info(f"Este chamado foi `{current_status}` e não pode ser alterado.")
+            
+            # Campo de justificativa se a negação for selecionada
+            if new_status == "Negado":
+                razao_negativa = st.text_area("Justificativa da Negação", value=chamado_atual['razao_negativa'] or "")
+                if not razao_negativa:
+                    st.warning("A justificativa é obrigatória para chamados negados.")
+            else:
+                razao_negativa = ""
+
+            if st.form_submit_button("Salvar Alterações"):
+                if new_status == "Negado" and not razao_negativa:
+                    st.error("Por favor, preencha a justificativa para negar o chamado.")
+                else:
+                    db.atualizar_chamado(chamado_id_selecionado, new_status, responsavel, new_resultado, razao_negativa)
+                    st.success(f"Chamado #{chamado_id_selecionado} atualizado com sucesso!")
+                    st.rerun()
+    else:
+        st.info("Nenhum chamado selecionado.")
+
+# --- BARRA LATERAL (SIDEBAR) ---
+st.sidebar.title("Menu")
+
+# Botões que abrem dialogs
+if st.sidebar.button("🏗️ Cadastrar Nova Obra", use_container_width=True):
+    obra_dialog()
+if st.sidebar.button("📝 Abrir Novo Chamado", use_container_width=True):
+    novo_chamado_dialog()
+if st.sidebar.button("📝 Editar Chamado", use_container_width=True):
+    editar_chamado_dialog()
+
+# Botão para limpar o banco de dados
+st.sidebar.markdown("---")
+st.sidebar.markdown("### Administração")
+if st.sidebar.button("🗑️ Limpar Banco de Dados", use_container_width=True):
+    if st.sidebar.columns(1)[0].button("Confirma Limpar?", type="secondary", key="confirm_clean"):
+        db.limpar_db()
+        st.success("Banco de dados limpo com sucesso! A página será recarregada.")
+        st.rerun()
+
+# Botões de navegação
+if st.sidebar.button("📊 Visualizar Chamados", use_container_width=True):
+    st.session_state.pagina_ativa = "Visualizar Chamados"
+
+# --- CONTEÚDO PRINCIPAL DA PÁGINA (Controlado pelo st.session_state) ---
+
+# --- Página: Visualizar Chamados (AGORA É A PADRÃO) ---
+if st.session_state.pagina_ativa == "Visualizar Chamados":
+    st.subheader("📊 Painel de Acompanhamento de Chamados")
+    
+    chamados, colunas = db.listar_chamados()
+
+    if not chamados:
+        st.info("Nenhum chamado encontrado.")
+    else:
+        df = pd.DataFrame(chamados, columns=colunas)
+        obras = db.listar_obras()
+        mapa_obras = {obra['id']: obra['nome_obra'] for obra in obras}
+        df['nome_obra'] = df['obra_id'].map(mapa_obras).fillna("Obra não encontrada")
+        
+        # --- CARDS COM OS NOVOS STATUS DOS CHAMADOS ---
+        st.markdown("---")
+        st.subheader("Visão Geral do Status dos Chamados")
+        
+        df['data_solicitacao'] = pd.to_datetime(df['data_solicitacao'])
+        df['previsao_retorno'] = pd.to_datetime(df['previsao_retorno'])
+        
+        hoje = pd.to_datetime(date.today())
+        
+        # Contagem para os novos cards
+        num_em_andamento = len(df[df['status'] == 'Em Andamento'])
+        num_concluidos = len(df[df['status'] == 'Concluído'])
+        num_negados = len(df[df['status'] == 'Negado'])
+        
+        # Filtra chamados em andamento para verificar prazo
+        df_em_andamento = df[df['status'] == 'Em Andamento']
+        num_no_prazo = len(df_em_andamento[df_em_andamento['previsao_retorno'] >= hoje])
+        num_atrasados = len(df_em_andamento[df_em_andamento['previsao_retorno'] < hoje])
+        
+        col1, col2, col3, col4, col5 = st.columns(5)
+        with col1:
+            st.markdown(
+                f"<div style='background-color:#E0F7FA; padding:10px; border-radius:10px;'>"
+                f"<h3 style='color:#00796B; text-align:center;'>Em Andamento</h3>"
+                f"<h1 style='color:#00796B; text-align:center;'>{num_em_andamento}</h1>"
+                f"</div>", unsafe_allow_html=True
+            )
+        with col2:
+            st.markdown(
+                f"<div style='background-color:#E8F5E9; padding:10px; border-radius:10px;'>"
+                f"<h3 style='color:#2E7D32; text-align:center;'>No Prazo</h3>"
+                f"<h1 style='color:#2E7D32; text-align:center;'>{num_no_prazo}</h1>"
+                f"</div>", unsafe_allow_html=True
+            )
+        with col3:
+            st.markdown(
+                f"<div style='background-color:#FBE9E7; padding:10px; border-radius:10px;'>"
+                f"<h3 style='color:#D84315; text-align:center;'>Atrasados</h3>"
+                f"<h1 style='color:#D84315; text-align:center;'>{num_atrasados}</h1>"
+                f"</div>", unsafe_allow_html=True
+            )
+        with col4:
+            st.markdown(
+                f"<div style='background-color:#E8EAF6; padding:10px; border-radius:10px;'>"
+                f"<h3 style='color:#3F51B5; text-align:center;'>Concluídos</h3>"
+                f"<h1 style='color:#3F51B5; text-align:center;'>{num_concluidos}</h1>"
+                f"</div>", unsafe_allow_html=True
+            )
+        with col5:
+            st.markdown(
+                f"<div style='background-color:#FFEBEE; padding:10px; border-radius:10px;'>"
+                f"<h3 style='color:#C62828; text-align:center;'>Negados</h3>"
+                f"<h1 style='color:#C62828; text-align:center;'>{num_negados}</h1></div>", unsafe_allow_html=True
+            )
+
+
+        # --- GRÁFICOS ---
+        st.markdown("---")
+        with st.expander("📈 Análise Gráfica", expanded=True):
+            col_grafico1, col_grafico2 = st.columns(2)
+
+            with col_grafico1:
+                df_status = df.groupby('status').size().reset_index(name='Contagem')
+                fig_status = px.pie(
+                    df_status, 
+                    values='Contagem', 
+                    names='status', 
+                    title='Distribuição por Status',
+                    color_discrete_sequence=px.colors.qualitative.Pastel
+                )
+                st.plotly_chart(fig_status, use_container_width=True)
+
+            with col_grafico2:
+                df_obras = df.groupby('nome_obra').size().reset_index(name='Contagem')
+                fig_obras = px.pie(
+                    df_obras, 
+                    values='Contagem', 
+                    names='nome_obra', 
+                    title='Distribuição por Obra',
+                    color_discrete_sequence=px.colors.qualitative.Pastel
+                )
+                st.plotly_chart(fig_obras, use_container_width=True)
+        
+        # --- TABELA DE VISUALIZAÇÃO ---
+        st.markdown("---")
+        st.subheader("Tabela de Chamados")
+        st.dataframe(
+            df[['id', 'titulo', 'nome_obra', 'solicitante', 'status', 'data_solicitacao', 'previsao_retorno']],
+            hide_index=True,
+            use_container_width=True
         )
-    """)
 
-    # Tabela de chamados
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS chamados (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            obra_id INTEGER,
-            titulo TEXT NOT NULL,
-            solicitante TEXT NOT NULL,
-            data_solicitacao TEXT NOT NULL,
-            descricao TEXT NOT NULL,
-            status TEXT NOT NULL,
-            previsao_retorno TEXT,
-            responsavel_analise TEXT,
-            resultado TEXT,
-            razao_negativa TEXT,
-            FOREIGN KEY (obra_id) REFERENCES obras(id)
-        )
-    """)
-
-    conn.commit()
-    conn.close()
-
-def limpar_db():
-    """Limpa todos os registros das tabelas."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM chamados")
-    cursor.execute("DELETE FROM obras")
-    conn.commit()
-    conn.close()
-
-
-# --- FUNÇÕES DE LÓGICA DE NEGÓCIO ---
-
-def adicionar_obra(nome, endereco, cidade, estado):
-    """Adiciona uma nova obra ao banco de dados."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO obras (nome_obra, endereco, cidade, estado) VALUES (?, ?, ?, ?)",
-        (nome, endereco, cidade, estado)
-    )
-    conn.commit()
-    conn.close()
-
-def listar_obras():
-    """Lista todas as obras cadastradas."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM obras")
-    obras = cursor.fetchall()
-    conn.close()
-    return obras
-
-def adicionar_chamado(obra_id, titulo, solicitante, descricao, previsao_retorno):
-    """
-    Adiciona um novo chamado ao banco de dados.
-    A data da solicitação é gerada automaticamente aqui.
-    """
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # GERA a data atual aqui dentro da função
-    data_hoje = datetime.date.today().strftime("%Y-%m-%d")
-
-    cursor.execute(
-        "INSERT INTO chamados (obra_id, titulo, solicitante, data_solicitacao, descricao, status, previsao_retorno) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (obra_id, titulo, solicitante, data_hoje, descricao, "Na Fila de Espera", previsao_retorno)
-    )
-    conn.commit()
-    conn.close()
-
-
-def listar_chamados():
-    """
-    Lista todos os chamados e retorna os dados
-    juntamente com os nomes das colunas.
-    """
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM chamados")
-    # Retorna uma lista de tuplas, onde a primeira tupla é o nome das colunas
-    colunas = [descricao[0] for descricao in cursor.description]
-    chamados = cursor.fetchall()
-    conn.close()
-    return chamados, colunas
-
-
-def get_chamado_by_id(chamado_id):
-    """Busca um chamado pelo ID."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM chamados WHERE id = ?", (chamado_id,))
-    chamado = cursor.fetchone()
-    conn.close()
-    return chamado
-
-def atualizar_chamado(chamado_id, status, responsavel, resultado, razao_negativa):
-    """Atualiza o status e a análise de um chamado."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE chamados SET status = ?, responsavel_analise = ?, resultado = ?, razao_negativa = ? WHERE id = ?",
-        (status, responsavel, resultado, razao_negativa, chamado_id)
-    )
-    conn.commit()
-    conn.close()
+# --- A PÁGINA 'ABRIR NOVO CHAMADO' FOI REMOVIDA, AGORA É UM POP-UP ---
