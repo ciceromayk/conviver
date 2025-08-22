@@ -142,10 +142,13 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
             key='data_editor_chamados'
         )
         
-        # Detecta se uma linha foi selecionada ou se a seleção mudou
-        if st.session_state.data_editor_chamados['selection']['rows']:
+        # --- NOVO CÓDIGO PARA TRATAR A SELEÇÃO ---
+        selection = st.session_state.data_editor_chamados.get('selection', {})
+        selected_rows = selection.get('rows', [])
+
+        if selected_rows:
             # Pega o ID da linha selecionada
-            selected_id = edited_df.loc[st.session_state.data_editor_chamados['selection']['rows'][0], 'id']
+            selected_id = edited_df.loc[selected_rows[0], 'id']
             if selected_id != st.session_state.chamado_selecionado_id:
                 st.session_state.chamado_selecionado_id = selected_id
                 st.rerun() # Reinicia para carregar os dados
