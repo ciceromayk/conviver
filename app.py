@@ -22,12 +22,8 @@ if 'pagina_ativa' not in st.session_state:
     st.session_state.pagina_ativa = "Visualizar Chamados"
 if 'chamado_selecionado_id' not in st.session_state:
     st.session_state.chamado_selecionado_id = None
-if 'df_chamados' not in st.session_state:
-    st.session_state.df_chamados = pd.DataFrame()
-if 'last_selected_rows' not in st.session_state:
-    st.session_state.last_selected_rows = []
 
-# --- DEFINIÇÃO DO DIALOG (POP-UP) ---
+# --- DEFINIÇÃO DOS DIALOGS (POP-UPS) ---
 @st.dialog("Cadastro Rápido de Obra")
 def obra_dialog():
     with st.form("form_obra_popup"):
@@ -41,52 +37,61 @@ def obra_dialog():
             if nome and cidade and estado:
                 db.adicionar_obra(nome, endereco, cidade, estado)
                 st.success("Obra cadastrada com sucesso!") # Mensagem de sucesso
-                # O st.rerun() fecha o pop-up e atualiza a aplicação.
                 st.rerun()  
             else:
                 st.warning("Nome, Cidade e Estado são obrigatórios.")
 
 @st.dialog("Editar Status do Chamado")
-def editar_chamado_dialog(chamado_id_selecionado):
-    chamado_atual = db.get_chamado_by_id(chamado_id_selecionado)
-    if not chamado_atual:
-        st.error("Chamado não encontrado.")
+def editar_chamado_dialog():
+    # Lista todos os chamados para que o usuário possa selecionar
+    chamados_disponiveis, _ = db.listar_chamados()
+    if not chamados_disponiveis:
+        st.error("Nenhum chamado disponível para edição.")
         return
 
-    st.write(f"**Analisando Chamado #{chamado_atual['id']} - {chamado_atual['titulo']}**")
-    with st.form("editar_chamado_form"):
-        responsavel = st.text_input("Responsável pela Análise", value=chamado_atual['responsavel_analise'] or "")
-        status_opcoes = ["Novo", "Em Análise", "Aprovado", "Negado", "Concluído"]
-        status_atual = chamado_atual['status'] if chamado_atual['status'] in status_opcoes else "Novo"
-        status = st.selectbox("Novo Status", options=status_opcoes, index=status_opcoes.index(status_atual))
-        
-        resultado_opcoes = ["", "Aceito", "Negado"]
-        resultado_atual = chamado_atual['resultado'] if chamado_atual['resultado'] else ""
-        resultado = st.selectbox("Resultado Final", options=resultado_opcoes, index=resultado_opcoes.index(resultado_atual))
+    opcoes_chamados = {f"ID {c['id']} - {c['titulo']}": c['id'] for c in chamados_disponiveis}
+    chamado_selecionado_str = st.selectbox("Selecione o Chamado para Editar", options=opcoes_chamados.keys())
+    
+    if chamado_selecionado_str:
+        chamado_id_selecionado = opcoes_chamados[chamado_selecionado_str]
+        chamado_atual = db.get_chamado_by_id(chamado_id_selecionado)
 
-        razao_negativa = st.text_area("Justificativa (se negado)", value=chamado_atual['razao_negativa'] or "")
+        if not chamado_atual:
+            st.error("Chamado não encontrado.")
+            return
 
-        if st.form_submit_button("Salvar Alterações"):
-            db.atualizar_chamado(chamado_id_selecionado, status, responsavel, resultado, razao_negativa)
-            st.success(f"Chamado #{chamado_id_selecionado} atualizado com sucesso!")
-            st.session_state.chamado_selecionado_id = None
-            st.rerun()
+        st.markdown(f"**Detalhes do Chamado #{chamado_atual['id']}**")
+        with st.form("editar_chamado_form"):
+            responsavel = st.text_input("Responsável pela Análise", value=chamado_atual['responsavel_analise'] or "")
+            status_opcoes = ["Novo", "Em Análise", "Aprovado", "Negado", "Concluído"]
+            status_atual = chamado_atual['status'] if chamado_atual['status'] in status_opcoes else "Novo"
+            status = st.selectbox("Novo Status", options=status_opcoes, index=status_opcoes.index(status_atual))
+            
+            resultado_opcoes = ["", "Aceito", "Negado"]
+            resultado_atual = chamado_atual['resultado'] if chamado_atual['resultado'] else ""
+            resultado = st.selectbox("Resultado Final", options=resultado_opcoes, index=resultado_opcoes.index(resultado_atual))
+
+            razao_negativa = st.text_area("Justificativa (se negado)", value=chamado_atual['razao_negativa'] or "")
+
+            if st.form_submit_button("Salvar Alterações"):
+                db.atualizar_chamado(chamado_id_selecionado, status, responsavel, resultado, razao_negativa)
+                st.success(f"Chamado #{chamado_id_selecionado} atualizado com sucesso!")
+                st.rerun()
+    else:
+        st.info("Nenhum chamado selecionado.")
 
 # --- BARRA LATERAL (SIDEBAR) ---
 st.sidebar.title("Menu")
 
-# Botão para o pop-up de cadastro de obra
+# Botões que abrem dialogs
 if st.sidebar.button("🏗️ Cadastrar Nova Obra", use_container_width=True):
     obra_dialog()
-
-# Botão para o pop-up de edição de chamado
-editar_disabled = st.session_state.chamado_selecionado_id is None
-if st.sidebar.button("📝 Editar Chamado Selecionado", use_container_width=True, disabled=editar_disabled):
-    editar_chamado_dialog(st.session_state.chamado_selecionado_id)
+if st.sidebar.button("📝 Editar Chamado", use_container_width=True):
+    editar_chamado_dialog()
 
 st.sidebar.markdown("---") 
 
-# Botões de navegação que alteram o estado da página
+# Botões de navegação
 if st.sidebar.button("📊 Visualizar Chamados", use_container_width=True):
     st.session_state.pagina_ativa = "Visualizar Chamados"
 if st.sidebar.button("📝 Abrir Novo Chamado", use_container_width=True):
@@ -99,17 +104,12 @@ if st.sidebar.button("📝 Abrir Novo Chamado", use_container_width=True):
 if st.session_state.pagina_ativa == "Visualizar Chamados":
     st.subheader("📊 Painel de Acompanhamento de Chamados")
     
-    # A função listar_chamados agora retorna dois valores
     chamados, colunas = db.listar_chamados()
 
     if not chamados:
         st.info("Nenhum chamado encontrado.")
     else:
-        # Cria o DataFrame com os dados e colunas corretos
         df = pd.DataFrame(chamados, columns=colunas)
-        st.session_state.df_chamados = df # Guarda o DataFrame no estado da sessão
-        
-        # Para melhorar a visualização, vamos buscar o nome da obra
         obras = db.listar_obras()
         mapa_obras = {obra['id']: obra['nome_obra'] for obra in obras}
         df['nome_obra'] = df['obra_id'].map(mapa_obras).fillna("Obra não encontrada")
@@ -118,20 +118,11 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
         st.markdown("---")
         st.subheader("Visão Geral")
         
-        # Converte as colunas de data para o tipo datetime para comparação
         df['data_solicitacao'] = pd.to_datetime(df['data_solicitacao'])
         df['previsao_retorno'] = pd.to_datetime(df['previsao_retorno'])
-        
-        # Filtra os chamados que não foram concluídos
         df_abertos = df[df['status'] != 'Concluído']
-        
-        # Calcula o número de chamados em aberto (não concluídos)
         num_abertos = len(df_abertos)
-        
-        # Calcula o número de chamados resolvidos (Concluído)
         num_resolvidos = len(df[df['status'] == 'Concluído'])
-        
-        # Verifica se a previsão de retorno já passou para os chamados em aberto
         hoje = pd.to_datetime(date.today())
         df_abertos_atrasados = df_abertos[df_abertos['previsao_retorno'] < hoje]
         num_atrasados = len(df_abertos_atrasados)
@@ -186,46 +177,14 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
                 )
                 st.plotly_chart(fig_obras, use_container_width=True)
         
-        
-        # --- FUNÇÃO DE CALLBACK PARA A SELEÇÃO ---
-        def handle_selection_change():
-            selection = st.session_state.data_editor_chamados.get('selection', {}).get('rows', [])
-            if selection:
-                selected_row_index = selection[0]
-                if selected_row_index in st.session_state.df_chamados.index:
-                    selected_id = st.session_state.df_chamados.iloc[selected_row_index]['id']
-                    st.session_state.chamado_selecionado_id = selected_id
-            else:
-                st.session_state.chamado_selecionado_id = None
-            st.rerun()
-
-        # --- TABELA INTERATIVA E BOTÃO DE EDIÇÃO ---
+        # --- TABELA DE VISUALIZAÇÃO ---
         st.markdown("---")
-        with st.expander("📝 Gerenciar e Editar Chamados", expanded=True):
-            st.markdown("Selecione um chamado na tabela para editar. Em seguida, clique em 'Editar Chamado Selecionado' na barra lateral.")
-            
-            # st.data_editor com o callback
-            edited_df = st.data_editor(
-                df[['id', 'titulo', 'nome_obra', 'solicitante', 'status', 'data_solicitacao', 'previsao_retorno']],
-                hide_index=True,
-                use_container_width=True,
-                column_order=('id', 'titulo', 'nome_obra', 'solicitante', 'status', 'data_solicitacao', 'previsao_retorno'),
-                disabled=df.columns, # Desabilita edição direta na tabela
-                column_config={
-                    "id": st.column_config.NumberColumn(label="ID", help="Identificador único do chamado"),
-                    "titulo": "Título",
-                    "nome_obra": "Obra",
-                    "solicitante": "Solicitante",
-                    "status": "Status",
-                    "data_solicitacao": "Data da Solicitação",
-                    "previsao_retorno": "Previsão de Retorno"
-                },
-                key='data_editor_chamados',
-                on_change=handle_selection_change
-            )
-            
-            # O formulário de edição foi movido para o pop-up
-            st.info("Para editar, selecione um chamado na tabela e use o botão na barra lateral.")
+        st.subheader("Tabela de Chamados")
+        st.dataframe(
+            df[['id', 'titulo', 'nome_obra', 'solicitante', 'status', 'data_solicitacao', 'previsao_retorno']],
+            hide_index=True,
+            use_container_width=True
+        )
 
 # --- Página: Abrir Novo Chamado ---
 elif st.session_state.pagina_ativa == "Abrir Novo Chamado":
