@@ -63,15 +63,37 @@ def editar_chamado_dialog():
         st.markdown(f"**Detalhes do Chamado #{chamado_atual['id']}**")
         with st.form("editar_chamado_form"):
             responsavel = st.text_input("Responsável pela Análise", value=chamado_atual['responsavel_analise'] or "")
-            status_opcoes = ["Novo", "Em Análise", "Aprovado", "Negado", "Concluído"]
-            status_atual = chamado_atual['status'] if chamado_atual['status'] in status_opcoes else "Novo"
-            status = st.selectbox("Novo Status", options=status_opcoes, index=status_opcoes.index(status_atual))
             
-            resultado_opcoes = ["", "Aceito", "Negado"]
-            resultado_atual = chamado_atual['resultado'] if chamado_atual['resultado'] else ""
-            resultado = st.selectbox("Resultado Final", options=resultado_opcoes, index=resultado_opcoes.index(resultado_atual))
+            # Lógica para determinar as opções de status com base no status atual
+            status_atual = chamado_atual['status']
+            if status_atual == "Novo":
+                status_opcoes = ["Novo", "Aprovado", "Negado"]
+            elif status_atual == "Aprovado":
+                status_opcoes = ["Aprovado", "Em Andamento"]
+            elif status_atual == "Em Andamento":
+                status_opcoes = ["Em Andamento", "Concluído"]
+            else:
+                status_opcoes = [status_atual] # Status finais (Concluído, Negado) não podem ser alterados
 
-            razao_negativa = st.text_area("Justificativa (se negado)", value=chamado_atual['razao_negativa'] or "")
+            # Encontra o índice do status atual para o selectbox
+            status_index = status_opcoes.index(status_atual) if status_atual in status_opcoes else 0
+            status = st.selectbox("Novo Status", options=status_opcoes, index=status_index)
+            
+            resultado = ""
+            razao_negativa = ""
+
+            # Se o status for "Negado", exibe o campo de justificativa
+            if status == "Negado":
+                razao_negativa = st.text_area("Justificativa da Negação", value=chamado_atual['razao_negativa'] or "")
+                resultado = "Negado"
+            
+            # Se o status for "Aprovado" ou "Concluído", define o resultado
+            elif status == "Aprovado" or status == "Em Andamento" or status == "Concluído":
+                resultado = "Aceito"
+            
+            else: # Mantém o resultado anterior se o status for "Negado" ou "Concluído" e não for alterado
+                 resultado_atual = chamado_atual['resultado'] if chamado_atual['resultado'] else ""
+                 resultado = resultado_atual
 
             if st.form_submit_button("Salvar Alterações"):
                 db.atualizar_chamado(chamado_id_selecionado, status, responsavel, resultado, razao_negativa)
@@ -114,41 +136,62 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
         mapa_obras = {obra['id']: obra['nome_obra'] for obra in obras}
         df['nome_obra'] = df['obra_id'].map(mapa_obras).fillna("Obra não encontrada")
         
-        # --- CARDS COM O STATUS DOS CHAMADOS ---
+        # --- CARDS COM OS NOVOS STATUS DOS CHAMADOS ---
         st.markdown("---")
-        st.subheader("Visão Geral")
+        st.subheader("Visão Geral do Status dos Chamados")
         
         df['data_solicitacao'] = pd.to_datetime(df['data_solicitacao'])
         df['previsao_retorno'] = pd.to_datetime(df['previsao_retorno'])
-        df_abertos = df[df['status'] != 'Concluído']
-        num_abertos = len(df_abertos)
-        num_resolvidos = len(df[df['status'] == 'Concluído'])
-        hoje = pd.to_datetime(date.today())
-        df_abertos_atrasados = df_abertos[df_abertos['previsao_retorno'] < hoje]
-        num_atrasados = len(df_abertos_atrasados)
         
-        col1, col2, col3 = st.columns(3)
+        hoje = pd.to_datetime(date.today())
+        
+        # Contagem para os novos cards
+        num_em_andamento = len(df[df['status'] == 'Em Andamento'])
+        num_concluidos = len(df[df['status'] == 'Concluído'])
+        num_negados = len(df[df['status'] == 'Negado'])
+        
+        # Filtra chamados em andamento para verificar prazo
+        df_em_andamento = df[df['status'] == 'Em Andamento']
+        num_no_prazo = len(df_em_andamento[df_em_andamento['previsao_retorno'] >= hoje])
+        num_atrasados = len(df_em_andamento[df_em_andamento['previsao_retorno'] < hoje])
+        
+        col1, col2, col3, col4, col5 = st.columns(5)
         with col1:
             st.markdown(
                 f"<div style='background-color:#E0F7FA; padding:10px; border-radius:10px;'>"
-                f"<h3 style='color:#00796B; text-align:center;'>Chamados em Aberto</h3>"
-                f"<h1 style='color:#00796B; text-align:center;'>{num_abertos}</h1>"
+                f"<h3 style='color:#00796B; text-align:center;'>Em Andamento</h3>"
+                f"<h1 style='color:#00796B; text-align:center;'>{num_em_andamento}</h1>"
                 f"</div>", unsafe_allow_html=True
             )
         with col2:
             st.markdown(
                 f"<div style='background-color:#E8F5E9; padding:10px; border-radius:10px;'>"
-                f"<h3 style='color:#2E7D32; text-align:center;'>Chamados Concluídos</h3>"
-                f"<h1 style='color:#2E7D32; text-align:center;'>{num_resolvidos}</h1>"
+                f"<h3 style='color:#2E7D32; text-align:center;'>No Prazo</h3>"
+                f"<h1 style='color:#2E7D32; text-align:center;'>{num_no_prazo}</h1>"
                 f"</div>", unsafe_allow_html=True
             )
         with col3:
             st.markdown(
                 f"<div style='background-color:#FBE9E7; padding:10px; border-radius:10px;'>"
-                f"<h3 style='color:#D84315; text-align:center;'>Chamados Atrasados</h3>"
+                f"<h3 style='color:#D84315; text-align:center;'>Atrasados</h3>"
                 f"<h1 style='color:#D84315; text-align:center;'>{num_atrasados}</h1>"
                 f"</div>", unsafe_allow_html=True
             )
+        with col4:
+            st.markdown(
+                f"<div style='background-color:#E8EAF6; padding:10px; border-radius:10px;'>"
+                f"<h3 style='color:#3F51B5; text-align:center;'>Concluídos</h3>"
+                f"<h1 style='color:#3F51B5; text-align:center;'>{num_concluidos}</h1>"
+                f"</div>", unsafe_allow_html=True
+            )
+        with col5:
+            st.markdown(
+                f"<div style='background-color:#FFEBEE; padding:10px; border-radius:10px;'>"
+                f"<h3 style='color:#C62828; text-align:center;'>Negados</h3>"
+                f"<h1 style='color:#C62828; text-align:center;'>{num_negados}</h1>"
+                f"</div>", unsafe_allow_html=True
+            )
+
 
         # --- GRÁFICOS ---
         st.markdown("---")
