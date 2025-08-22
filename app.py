@@ -76,7 +76,7 @@ def editar_chamado_dialog():
             # Se o chamado está em fase de triagem (status 'Novo')
             if current_status == "Novo":
                 st.markdown(f"**Status Atual:** `{current_status}`")
-                step_options = st.radio("Ação:", ["Aprovar", "Negar", "Manter como Novo"])
+                step_options = st.radio("Ação:", ["Aprovar", "Negar", "Manter como Novo"], index=2)
                 if step_options == "Aprovar":
                     new_status = "Aprovado"
                     new_resultado = "Aceito"
@@ -89,9 +89,10 @@ def editar_chamado_dialog():
             elif current_resultado == "Aceito":
                 st.markdown(f"**Status Atual:** `{current_status}`")
                 st.write("Ação:")
-                if st.button("Marcar como Concluído"):
+                step_options = st.radio("Ação:", ["Mover para Em Andamento", "Marcar como Concluído", "Manter Status Atual"])
+                if step_options == "Marcar como Concluído":
                     new_status = "Concluído"
-                if st.button("Marcar como Em Andamento"):
+                if step_options == "Mover para Em Andamento":
                     new_status = "Em Andamento"
             else:
                  # Chamados negados não podem ser alterados
