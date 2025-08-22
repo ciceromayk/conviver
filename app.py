@@ -15,6 +15,8 @@ st.title("🚀 Gestor de Solicitações e Obras")
 # Define a página inicial se ainda não estiver definida
 if 'pagina_ativa' not in st.session_state:
     st.session_state.pagina_ativa = "Visualizar Chamados"
+if 'chamado_selecionado_id' not in st.session_state:
+    st.session_state.chamado_selecionado_id = None
 
 # --- DEFINIÇÃO DO DIALOG (POP-UP) ---
 @st.dialog("Cadastro Rápido de Obra")
@@ -71,34 +73,69 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
         df['nome_obra'] = df['obra_id'].map(mapa_obras).fillna("Obra não encontrada")
         
         # Reordenando para melhor visualização
-        st.dataframe(df[['id', 'titulo', 'nome_obra', 'solicitante', 'status', 'data_solicitacao', 'previsao_retorno']], use_container_width=True)
+        st.markdown("Selecione um chamado na tabela para analisar.")
+        
+        # AQUI está a mudança principal: st.data_editor para seleção de linha
+        edited_df = st.data_editor(
+            df[['id', 'titulo', 'nome_obra', 'solicitante', 'status', 'data_solicitacao', 'previsao_retorno']],
+            hide_index=True,
+            use_container_width=True,
+            column_order=('id', 'titulo', 'nome_obra', 'solicitante', 'status', 'data_solicitacao', 'previsao_retorno'),
+            disabled=df.columns, # Desabilita edição direta na tabela
+            column_config={
+                "id": st.column_config.NumberColumn(label="ID", help="Identificador único do chamado"),
+                "titulo": "Título",
+                "nome_obra": "Obra",
+                "solicitante": "Solicitante",
+                "status": "Status",
+                "data_solicitacao": "Data da Solicitação",
+                "previsao_retorno": "Previsão de Retorno"
+            }
+        )
+        
+        # Captura o ID da linha selecionada
+        if edited_df.empty:
+            st.session_state.chamado_selecionado_id = None
+        else:
+            selected_rows = edited_df.loc[edited_df.index.isin(st.session_state.get('last_selected_rows', []))]
+            if not selected_rows.empty:
+                st.session_state.chamado_selecionado_id = selected_rows['id'].iloc[0]
 
+        # Salva as linhas selecionadas para a próxima execução
+        st.session_state.last_selected_rows = edited_df.index
+        
         st.markdown("---")
         st.subheader("🔍 Analisar e Atualizar um Chamado")
-
-        ids_chamados = [chamado['id'] for chamado in chamados]
-        if ids_chamados:
-            chamado_id_selecionado = st.selectbox("Selecione o ID do Chamado para analisar:", options=ids_chamados)
+        
+        # Agora o formulário só aparece se um chamado for selecionado
+        if st.session_state.chamado_selecionado_id:
+            chamado_id_selecionado = st.session_state.chamado_selecionado_id
             chamado_atual = db.get_chamado_by_id(chamado_id_selecionado)
             
-            with st.form(f"analise_form_{chamado_id_selecionado}", clear_on_submit=True):
-                st.write(f"**Analisando Chamado #{chamado_atual['id']} - {chamado_atual['titulo']}**")
-                
-                responsavel = st.text_input("Responsável pela Análise", value=chamado_atual['responsavel_analise'] or "")
-                status_opcoes = ["Novo", "Em Análise", "Aprovado", "Negado", "Concluído"]
-                status_atual = chamado_atual['status'] if chamado_atual['status'] in status_opcoes else "Novo"
-                status = st.selectbox("Novo Status", options=status_opcoes, index=status_opcoes.index(status_atual))
-                
-                resultado_opcoes = ["", "Aceito", "Negado"]
-                resultado_atual = chamado_atual['resultado'] if chamado_atual['resultado'] else ""
-                resultado = st.selectbox("Resultado Final", options=resultado_opcoes, index=resultado_opcoes.index(resultado_atual))
+            if chamado_atual:
+                with st.form(f"analise_form_{chamado_id_selecionado}", clear_on_submit=True):
+                    st.write(f"**Analisando Chamado #{chamado_atual['id']} - {chamado_atual['titulo']}**")
+                    
+                    responsavel = st.text_input("Responsável pela Análise", value=chamado_atual['responsavel_analise'] or "")
+                    status_opcoes = ["Novo", "Em Análise", "Aprovado", "Negado", "Concluído"]
+                    status_atual = chamado_atual['status'] if chamado_atual['status'] in status_opcoes else "Novo"
+                    status = st.selectbox("Novo Status", options=status_opcoes, index=status_opcoes.index(status_atual))
+                    
+                    resultado_opcoes = ["", "Aceito", "Negado"]
+                    resultado_atual = chamado_atual['resultado'] if chamado_atual['resultado'] else ""
+                    resultado = st.selectbox("Resultado Final", options=resultado_opcoes, index=resultado_opcoes.index(resultado_atual))
 
-                razao_negativa = st.text_area("Justificativa (se negado)", value=chamado_atual['razao_negativa'] or "")
+                    razao_negativa = st.text_area("Justificativa (se negado)", value=chamado_atual['razao_negativa'] or "")
 
-                if st.form_submit_button("Salvar Análise"):
-                    db.atualizar_chamado(chamado_id_selecionado, status, responsavel, resultado, razao_negativa)
-                    st.success(f"Chamado #{chamado_id_selecionado} atualizado com sucesso!")
-                    st.rerun()
+                    if st.form_submit_button("Salvar Análise"):
+                        db.atualizar_chamado(chamado_id_selecionado, status, responsavel, resultado, razao_negativa)
+                        st.success(f"Chamado #{chamado_id_selecionado} atualizado com sucesso!")
+                        st.session_state.chamado_selecionado_id = None # Limpa a seleção
+                        st.rerun()
+            else:
+                st.warning("Chamado selecionado não encontrado.")
+        else:
+            st.info("Selecione um chamado na tabela acima para editar.")
 
 # --- Página: Abrir Novo Chamado ---
 elif st.session_state.pagina_ativa == "Abrir Novo Chamado":
