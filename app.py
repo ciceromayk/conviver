@@ -64,41 +64,53 @@ def editar_chamado_dialog():
         with st.form("editar_chamado_form"):
             responsavel = st.text_input("Responsável pela Análise", value=chamado_atual['responsavel_analise'] or "")
             
-            # Lógica para determinar as opções de status com base no status atual
             status_atual = chamado_atual['status']
+            st.markdown(f"**Status Atual:** `{status_atual}`")
+
+            new_status = status_atual
+            resultado = chamado_atual['resultado']
+            razao_negativa = chamado_atual['razao_negativa']
+
+            st.markdown("---")
+            st.write("Escolha a próxima etapa do fluxo:")
+
+            # Lógica para determinar as opções de avanço
             if status_atual == "Novo":
-                status_opcoes = ["Novo", "Aprovado", "Negado"]
+                step_options = st.radio("Ação", ["Aprovar", "Negar", "Manter como Novo"])
+                if step_options == "Aprovar":
+                    new_status = "Aprovado"
+                    resultado = "Aceito"
+                elif step_options == "Negar":
+                    new_status = "Negado"
+                    resultado = "Negado"
+                else:
+                    new_status = "Novo"
             elif status_atual == "Aprovado":
-                status_opcoes = ["Aprovado", "Em Andamento"]
+                step_options = st.radio("Ação", ["Mover para 'Em Andamento'", "Manter Aprovado"])
+                if step_options == "Mover para 'Em Andamento'":
+                    new_status = "Em Andamento"
             elif status_atual == "Em Andamento":
-                status_opcoes = ["Em Andamento", "Concluído"]
+                step_options = st.radio("Ação", ["Marcar como 'Concluído'", "Manter 'Em Andamento'"])
+                if step_options == "Marcar como 'Concluído'":
+                    new_status = "Concluído"
             else:
-                status_opcoes = [status_atual] # Status finais (Concluído, Negado) não podem ser alterados
-
-            # Encontra o índice do status atual para o selectbox
-            status_index = status_opcoes.index(status_atual) if status_atual in status_opcoes else 0
-            status = st.selectbox("Novo Status", options=status_opcoes, index=status_index)
+                st.info("Este chamado já está em um status final (Concluído ou Negado) e não pode ser alterado.")
             
-            resultado = ""
-            razao_negativa = ""
-
-            # Se o status for "Negado", exibe o campo de justificativa
-            if status == "Negado":
+            # Campo de justificativa se a negação for selecionada
+            if new_status == "Negado":
                 razao_negativa = st.text_area("Justificativa da Negação", value=chamado_atual['razao_negativa'] or "")
-                resultado = "Negado"
-            
-            # Se o status for "Aprovado" ou "Concluído", define o resultado
-            elif status == "Aprovado" or status == "Em Andamento" or status == "Concluído":
-                resultado = "Aceito"
-            
-            else: # Mantém o resultado anterior se o status for "Negado" ou "Concluído" e não for alterado
-                 resultado_atual = chamado_atual['resultado'] if chamado_atual['resultado'] else ""
-                 resultado = resultado_atual
+                if not razao_negativa:
+                    st.warning("A justificativa é obrigatória para chamados negados.")
+            else:
+                razao_negativa = "" # Limpa a justificativa se o status não for negado
 
             if st.form_submit_button("Salvar Alterações"):
-                db.atualizar_chamado(chamado_id_selecionado, status, responsavel, resultado, razao_negativa)
-                st.success(f"Chamado #{chamado_id_selecionado} atualizado com sucesso!")
-                st.rerun()
+                if new_status == "Negado" and not razao_negativa:
+                    st.error("Por favor, preencha a justificativa para negar o chamado.")
+                else:
+                    db.atualizar_chamado(chamado_id_selecionado, new_status, responsavel, resultado, razao_negativa)
+                    st.success(f"Chamado #{chamado_id_selecionado} atualizado com sucesso!")
+                    st.rerun()
     else:
         st.info("Nenhum chamado selecionado.")
 
