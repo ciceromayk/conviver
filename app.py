@@ -46,12 +46,43 @@ def obra_dialog():
             else:
                 st.warning("Nome, Cidade e Estado são obrigatórios.")
 
+@st.dialog("Editar Status do Chamado")
+def editar_chamado_dialog(chamado_id_selecionado):
+    chamado_atual = db.get_chamado_by_id(chamado_id_selecionado)
+    if not chamado_atual:
+        st.error("Chamado não encontrado.")
+        return
+
+    st.write(f"**Analisando Chamado #{chamado_atual['id']} - {chamado_atual['titulo']}**")
+    with st.form("editar_chamado_form"):
+        responsavel = st.text_input("Responsável pela Análise", value=chamado_atual['responsavel_analise'] or "")
+        status_opcoes = ["Novo", "Em Análise", "Aprovado", "Negado", "Concluído"]
+        status_atual = chamado_atual['status'] if chamado_atual['status'] in status_opcoes else "Novo"
+        status = st.selectbox("Novo Status", options=status_opcoes, index=status_opcoes.index(status_atual))
+        
+        resultado_opcoes = ["", "Aceito", "Negado"]
+        resultado_atual = chamado_atual['resultado'] if chamado_atual['resultado'] else ""
+        resultado = st.selectbox("Resultado Final", options=resultado_opcoes, index=resultado_opcoes.index(resultado_atual))
+
+        razao_negativa = st.text_area("Justificativa (se negado)", value=chamado_atual['razao_negativa'] or "")
+
+        if st.form_submit_button("Salvar Alterações"):
+            db.atualizar_chamado(chamado_id_selecionado, status, responsavel, resultado, razao_negativa)
+            st.success(f"Chamado #{chamado_id_selecionado} atualizado com sucesso!")
+            st.session_state.chamado_selecionado_id = None
+            st.rerun()
+
 # --- BARRA LATERAL (SIDEBAR) ---
 st.sidebar.title("Menu")
 
 # Botão para o pop-up de cadastro de obra
 if st.sidebar.button("🏗️ Cadastrar Nova Obra", use_container_width=True):
     obra_dialog()
+
+# Botão para o pop-up de edição de chamado
+editar_disabled = st.session_state.chamado_selecionado_id is None
+if st.sidebar.button("📝 Editar Chamado Selecionado", use_container_width=True, disabled=editar_disabled):
+    editar_chamado_dialog(st.session_state.chamado_selecionado_id)
 
 st.sidebar.markdown("---") 
 
@@ -168,10 +199,10 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
                 st.session_state.chamado_selecionado_id = None
             st.rerun()
 
-        # --- TABELA INTERATIVA E FORMULÁRIO DE EDIÇÃO ---
+        # --- TABELA INTERATIVA E BOTÃO DE EDIÇÃO ---
         st.markdown("---")
         with st.expander("📝 Gerenciar e Editar Chamados", expanded=True):
-            st.markdown("Selecione um chamado na tabela para analisar.")
+            st.markdown("Selecione um chamado na tabela para editar. Em seguida, clique em 'Editar Chamado Selecionado' na barra lateral.")
             
             # st.data_editor com o callback
             edited_df = st.data_editor(
@@ -193,35 +224,8 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
                 on_change=handle_selection_change
             )
             
-            st.markdown("---")
-            if st.session_state.chamado_selecionado_id:
-                chamado_id_selecionado = st.session_state.chamado_selecionado_id
-                chamado_atual = db.get_chamado_by_id(chamado_id_selecionado)
-                
-                if chamado_atual:
-                    with st.form(f"analise_form_{chamado_id_selecionado}", clear_on_submit=True):
-                        st.write(f"**Analisando Chamado #{chamado_atual['id']} - {chamado_atual['titulo']}**")
-                        
-                        responsavel = st.text_input("Responsável pela Análise", value=chamado_atual['responsavel_analise'] or "")
-                        status_opcoes = ["Novo", "Em Análise", "Aprovado", "Negado", "Concluído"]
-                        status_atual = chamado_atual['status'] if chamado_atual['status'] in status_opcoes else "Novo"
-                        status = st.selectbox("Novo Status", options=status_opcoes, index=status_opcoes.index(status_atual))
-                        
-                        resultado_opcoes = ["", "Aceito", "Negado"]
-                        resultado_atual = chamado_atual['resultado'] if chamado_atual['resultado'] else ""
-                        resultado = st.selectbox("Resultado Final", options=resultado_opcoes, index=resultado_opcoes.index(resultado_atual))
-    
-                        razao_negativa = st.text_area("Justificativa (se negado)", value=chamado_atual['razao_negativa'] or "")
-    
-                        if st.form_submit_button("Salvar Análise"):
-                            db.atualizar_chamado(chamado_id_selecionado, status, responsavel, resultado, razao_negativa)
-                            st.success(f"Chamado #{chamado_id_selecionado} atualizado com sucesso!")
-                            st.session_state.chamado_selecionado_id = None # Limpa a seleção
-                            st.rerun()
-                else:
-                    st.warning("Chamado selecionado não encontrado.")
-            else:
-                st.info("Selecione um chamado na tabela acima para editar.")
+            # O formulário de edição foi movido para o pop-up
+            st.info("Para editar, selecione um chamado na tabela e use o botão na barra lateral.")
 
 # --- Página: Abrir Novo Chamado ---
 elif st.session_state.pagina_ativa == "Abrir Novo Chamado":
