@@ -41,6 +41,29 @@ def obra_dialog():
             else:
                 st.warning("Nome, Cidade e Estado são obrigatórios.")
 
+@st.dialog("Abrir Novo Chamado")
+def novo_chamado_dialog():
+    obras = db.listar_obras()
+    
+    if not obras:
+        st.warning("Nenhuma obra cadastrada. Clique em 'Cadastrar Nova Obra' na barra lateral para começar.")
+    else:
+        opcoes_obras = {f"{obra['id']} - {obra['nome_obra']}": obra['id'] for obra in obras}
+
+        with st.form("novo_chamado_form", clear_on_submit=True):
+            st.write("Preencha os dados da nova solicitação.")
+            obra_selecionada_str = st.selectbox("Selecione a Obra Relacionada", options=opcoes_obras.keys())
+            titulo = st.text_input("Título do Chamado")
+            solicitante = st.text_input("Seu Nome/Email")
+            descricao = st.text_area("Descrição detalhada da alteração")
+            previsao_retorno = st.date_input("Previsão de Retorno Desejada", min_value=date.today())
+
+            if st.form_submit_button("Enviar Solicitação"):
+                obra_id = opcoes_obras[obra_selecionada_str]
+                db.adicionar_chamado(obra_id, titulo, solicitante, descricao, previsao_retorno.strftime("%Y-%m-%d"))
+                st.success("Chamado enviado com sucesso!")
+                st.rerun()
+
 @st.dialog("Editar Status do Chamado")
 def editar_chamado_dialog():
     # Lista todos os chamados para que o usuário possa selecionar
@@ -122,6 +145,8 @@ st.sidebar.title("Menu")
 # Botões que abrem dialogs
 if st.sidebar.button("🏗️ Cadastrar Nova Obra", use_container_width=True):
     obra_dialog()
+if st.sidebar.button("📝 Abrir Novo Chamado", use_container_width=True):
+    novo_chamado_dialog()
 if st.sidebar.button("📝 Editar Chamado", use_container_width=True):
     editar_chamado_dialog()
 
@@ -130,9 +155,6 @@ st.sidebar.markdown("---")
 # Botões de navegação
 if st.sidebar.button("📊 Visualizar Chamados", use_container_width=True):
     st.session_state.pagina_ativa = "Visualizar Chamados"
-if st.sidebar.button("📝 Abrir Novo Chamado", use_container_width=True):
-    st.session_state.pagina_ativa = "Abrir Novo Chamado"
-
 
 # --- CONTEÚDO PRINCIPAL DA PÁGINA (Controlado pelo st.session_state) ---
 
@@ -242,26 +264,4 @@ if st.session_state.pagina_ativa == "Visualizar Chamados":
             use_container_width=True
         )
 
-# --- Página: Abrir Novo Chamado ---
-elif st.session_state.pagina_ativa == "Abrir Novo Chamado":
-    st.subheader("📝 Formulário de Nova Solicitação")
-    
-    obras = db.listar_obras()
-    
-    if not obras:
-        st.warning("Nenhuma obra cadastrada. Clique em 'Cadastrar Nova Obra' na barra lateral para começar.")
-    else:
-        opcoes_obras = {f"{obra['id']} - {obra['nome_obra']}": obra['id'] for obra in obras}
-
-        with st.form("novo_chamado_form", clear_on_submit=True):
-            
-            obra_selecionada_str = st.selectbox("Selecione a Obra Relacionada", options=opcoes_obras.keys())
-            titulo = st.text_input("Título do Chamado")
-            solicitante = st.text_input("Seu Nome/Email")
-            descricao = st.text_area("Descrição detalhada da alteração")
-            previsao_retorno = st.date_input("Previsão de Retorno Desejada", min_value=date.today())
-
-            if st.form_submit_button("Enviar Solicitação"):
-                obra_id = opcoes_obras[obra_selecionada_str]
-                db.adicionar_chamado(obra_id, titulo, solicitante, descricao, previsao_retorno.strftime("%Y-%m-%d"))
-                st.success("Chamado enviado com sucesso!")
+# --- A PÁGINA 'ABRIR NOVO CHAMADO' FOI REMOVIDA, AGORA É UM POP-UP ---
